@@ -1,5 +1,3 @@
-import bintray.Keys._
-
 lazy val root = (project in file(".")).settings(
   sbtPlugin := true,
   
@@ -18,8 +16,5 @@ lazy val root = (project in file(".")).settings(
   ),
   
   publishMavenStyle := false,
-  bintrayPublishSettings,
-  repository in bintray := "sbt-plugins",
-  licenses += ("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0.html")),
-  bintrayOrganization in bintray := None
+  licenses += ("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0.html"))
 )
