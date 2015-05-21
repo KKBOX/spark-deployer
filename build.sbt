@@ -1,10 +1,8 @@
-import bintray.Keys._
-
 lazy val root = (project in file(".")).settings(
   sbtPlugin := true,
   
   name := "spark-deployer",
-  version := "0.1.0-SNAPSHOT",
+  version := "0.1.0",
   organization := "net.pishen",
 
   scalaVersion := "2.10.5",
@@ -18,8 +16,5 @@ lazy val root = (project in file(".")).settings(
   ),
   
   publishMavenStyle := false,
-  bintrayPublishSettings,
-  repository in bintray := "sbt-plugins",
-  licenses += ("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0.html")),
-  bintrayOrganization in bintray := None
+  licenses += ("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0.html"))
 )
