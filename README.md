@@ -98,3 +98,4 @@ object Main {
 * `sparkDestroyCluster`
 * `sparkShowMachines`
 * `sparkUploadJar` uploads the job's jar file to the master.
+* `sparkRemoveS3Dir <dir-name>` remove the s3 directory with the `_$folder$` folder file. (ex. `sparkRemoveS3Dir s3://bucket_name/middle_folder/target_folder`)
