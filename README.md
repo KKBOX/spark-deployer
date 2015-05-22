@@ -53,7 +53,7 @@ subnet-id = "subnet-xxxxxxxx"
 use-private-ip = true
 ```
 * More information about `spark-tgz-url`:
-  * You may find one URL from Spark's website or host one by yourself. (We recommend hosting one by yourself to ensure a stable system and help balancing the server load.)
+  * You may find one URL from Spark's website or host one by yourself.
   * You may choose an older version of Spark or different version of Hadoop, but it's not tested, use at your own risk.
   * The URL must ends with `/<spark-folder-name>.tgz` for the auto deployment to work.
 * More information about `security-group-ids`:
