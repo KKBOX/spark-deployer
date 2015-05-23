@@ -49,17 +49,34 @@ class SparkDeployer(val sparkConf: SparkConf) {
   private def getWorkers() = getMyInstances().filter(i => i.getName.nonEmpty && i.name.startsWith(workerPrefix))
 
   //helper
-  private def ssh(address: String, remoteCommand: String, failedMessage: String, allocateTTY: Boolean) = {
-    val cmd = Some(Seq("ssh", "-i", sparkConf.pem,
-      "-o", "UserKnownHostsFile=/dev/null",
-      "-o", "StrictHostKeyChecking=no",
-      "-o", s"ConnectTimeout=${sparkConf.sshTimeout}"))
-      .map(seq => if (allocateTTY) seq :+ "-tt" else seq)
-      .map(_ :+ s"ec2-user@$address" :+ remoteCommand)
-      .get
-    println(cmd.mkString(" "))
-    val exitValue = cmd.!
-    if (exitValue != 0) sys.error(s"[ssh-error] exit:$exitValue - $failedMessage") else exitValue
+  private def ssh(address: String,
+    remoteCommand: String,
+    failedMessage: String,
+    allocateTTY: Boolean = false,
+    retryConnection: Boolean = false) = blocking {
+    def sshWithRetry(attempt: Int): Int = {
+      val cmd = Some(Seq("ssh", "-i", sparkConf.pem,
+        "-o", "UserKnownHostsFile=/dev/null",
+        "-o", "StrictHostKeyChecking=no"))
+        .map(seq => if (allocateTTY) seq :+ "-tt" else seq)
+        .map(_ :+ s"ec2-user@$address" :+ remoteCommand)
+        .get
+      println(cmd.mkString(" "))
+      val exitValue = cmd.!
+      if (exitValue == 0) {
+        exitValue
+      } else {
+        val errorMessage = s"[ssh-error] attempt:$attempt - exit:$exitValue - $failedMessage"
+        if (retryConnection && attempt < sparkConf.sshConnectionAttempts) {
+          println(errorMessage)
+          Thread.sleep(60000)
+          sshWithRetry(attempt + 1)
+        } else {
+          sys.error(errorMessage)
+        }
+      }
+    }
+    sshWithRetry(1)
   }
 
   //main functions
@@ -98,11 +115,11 @@ class SparkDeployer(val sparkConf: SparkConf) {
               .withTags(new Tag("Name", name)))
 
             //download spark
-            println(s"[$name] downloading spark (connect timeout = ${sparkConf.sshTimeout}s).")
+            println(s"[$name] downloading spark (retry attempts = ${sparkConf.sshConnectionAttempts} times).")
             ssh(address,
               s"wget -nv ${sparkConf.sparkTgzUrl} && tar -zxf ${sparkConf.sparkTgzName}",
               s"[$name] download spark failed.",
-              false)
+              retryConnection = true)
 
             //setup master ip
             println(s"[$name] setting master ip.")
@@ -110,8 +127,7 @@ class SparkDeployer(val sparkConf: SparkConf) {
             val masterIp = masterIpOpt.getOrElse(address)
             ssh(address,
               s"echo 'SPARK_MASTER_IP=$masterIp' > $sparkEnvPath && chmod u+x $sparkEnvPath",
-              s"[$name] set master failed.",
-              false)
+              s"[$name] set master failed.")
 
             address
           }
@@ -126,8 +142,7 @@ class SparkDeployer(val sparkConf: SparkConf) {
         println(s"[$masterName] staring master.")
         ssh(address,
           s"./${sparkConf.sparkDirName}/sbin/start-master.sh",
-          s"[$masterName] start master failed.",
-          false)
+          s"[$masterName] start master failed.")
 
         println(s"[$masterName] master started.\nWeb UI: http://$address:8080\nLogin command: ssh -i ${sparkConf.pem} ec2-user@$address")
     }
@@ -153,8 +168,7 @@ class SparkDeployer(val sparkConf: SparkConf) {
               println(s"[$workerName] staring worker.")
               ssh(address,
                 s"./${sparkConf.sparkDirName}/bin/spark-class org.apache.spark.deploy.worker.Worker spark://$masterIp:7077 &> /dev/null &",
-                s"[$workerName] start worker failed.",
-                false)
+                s"[$workerName] start worker failed.")
 
               println(s"[$workerName] worker started.")
               workerName -> "Success"
@@ -226,8 +240,7 @@ class SparkDeployer(val sparkConf: SparkConf) {
 
         val sshCmd = Seq("ssh", "-i", sparkConf.pem,
           "-o", "UserKnownHostsFile=/dev/null",
-          "-o", "StrictHostKeyChecking=no",
-          "-o", s"ConnectTimeout=${sparkConf.sshTimeout}").mkString(" ")
+          "-o", "StrictHostKeyChecking=no").mkString(" ")
 
         val uploadJarCmd = Seq("rsync",
           "--progress",
@@ -261,7 +274,7 @@ class SparkDeployer(val sparkConf: SparkConf) {
           .map(_ ++ args)
           .get.mkString(" ")
 
-        ssh(masterAddress, submitJobCmd, "job submission failed.", true)
+        ssh(masterAddress, submitJobCmd, "job submission failed.", allocateTTY = true)
     }
   }
 

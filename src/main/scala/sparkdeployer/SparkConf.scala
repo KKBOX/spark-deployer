@@ -40,7 +40,7 @@ class SparkConf(configFile: File) {
   val workerInstanceType = config.as[String]("worker.instance-type")
   val workerDiskSize = config.as[Int]("worker.disk-size")
 
-  val sshTimeout = config.as[Option[Int]]("ssh-timeout").getOrElse(120)
+  val sshConnectionAttempts = config.as[Option[Int]]("ssh-connection-attempts").getOrElse(10)
 
   val sparkTgzUrl = config.as[String]("spark-tgz-url")
   val sparkTgzName = {
