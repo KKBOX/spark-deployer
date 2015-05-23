@@ -2,7 +2,7 @@ lazy val root = (project in file(".")).settings(
   sbtPlugin := true,
   
   name := "spark-deployer",
-  version := "0.1.1-SNAPSHOT",
+  version := "0.2.0-SNAPSHOT",
   organization := "net.pishen",
 
   scalaVersion := "2.10.5",
