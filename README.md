@@ -8,11 +8,7 @@
 * Set the environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` for AWS.
 * In your sbt project, create `project/plugins.sbt`:
 ```
-resolvers += Resolver.url(
-  "bintray-pishen-sbt-plugins",
-  url("https://dl.bintray.com/pishen/sbt-plugins"))(Resolver.ivyStylePatterns)
-
-addSbtPlugin("net.pishen" % "spark-deployer" % "0.1.0")
+addSbtPlugin("net.pishen" % "spark-deployer" % "0.2.0")
 ```
 * Create the configuration file `spark-deployer.conf`:
 ```
@@ -24,18 +20,22 @@ pem = "/home/pishen/.ssh/pishen.pem"
 region = "us-west-2"
 
 master {
-  instance-type = "t2.medium"
+  instance-type = "m3.medium"
   # EBS disk-size, in GB, volume type fixed to gp2 SSD now.
   disk-size = 8
+  # The driver-memory used at spark-submit (optional)
+  driver-memory = "2G"
 }
 
 worker {
-  instance-type = "c4.large"
+  instance-type = "c4.xlarge"
   disk-size = 40
+  # The executor-memory used at spark-submit (optional)
+  executor-memory = "6G"
 }
 
-# Wait this amount of seconds for the machine's ssh to response. (default to 120s)
-ssh-timeout = 180
+# Max number of attempts trying to connect to the machine. (default to 10, one per minute.)
+ssh-connection-attempts = 8
 
 # URL for downloading the pre-built Spark tarball.
 spark-tgz-url = "http://d3kbcqa49mib13.cloudfront.net/spark-1.3.1-bin-hadoop1.tgz"
@@ -43,9 +43,7 @@ spark-tgz-url = "http://d3kbcqa49mib13.cloudfront.net/spark-1.3.1-bin-hadoop1.tg
 main-class = "core.Main"
 
 # Below are optional settings
-app-name = "spark_template"
-driver-memory = "1G"
-executor-memory = "1G"
+app-name = "my-app-name"
 
 security-group-ids = ["sg-xxxxxxxx", "sg-yyyyyyyy"]
 
@@ -53,7 +51,7 @@ subnet-id = "subnet-xxxxxxxx"
 use-private-ip = true
 ```
 * More information about `spark-tgz-url`:
-  * You may find one URL from Spark's website or host one by yourself. (We recommend hosting one by yourself to ensure a stable system and help balancing the server load.)
+  * You may find one URL from Spark's website or host one by yourself.
   * You may choose an older version of Spark or different version of Hadoop, but it's not tested, use at your own risk.
   * The URL must ends with `/<spark-folder-name>.tgz` for the auto deployment to work.
 * More information about `security-group-ids`:
@@ -62,7 +60,8 @@ use-private-ip = true
   * Allow port 8080, 8081, 4040 for web console.
 * Create `build.sbt` (Here we give a simple example):
 ```
-lazy val root = (project in file(".")).settings(
+lazy val root = (project in file("."))
+  .settings(
     name := "my-project-name",
     version := "0.1",
     scalaVersion := "2.10.5",

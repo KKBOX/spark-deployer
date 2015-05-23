@@ -36,11 +36,13 @@ class SparkConf(configFile: File) {
 
   val masterInstanceType = config.as[String]("master.instance-type")
   val masterDiskSize = config.as[Int]("master.disk-size")
+  val driverMemory = config.as[Option[String]]("master.driver-memory")
 
   val workerInstanceType = config.as[String]("worker.instance-type")
   val workerDiskSize = config.as[Int]("worker.disk-size")
+  val executorMemory = config.as[Option[String]]("worker.executor-memory")
 
-  val sshTimeout = config.as[Option[Int]]("ssh-timeout").getOrElse(120)
+  val sshConnectionAttempts = config.as[Option[Int]]("ssh-connection-attempts").getOrElse(10)
 
   val sparkTgzUrl = config.as[String]("spark-tgz-url")
   val sparkTgzName = {
@@ -51,8 +53,6 @@ class SparkConf(configFile: File) {
 
   val mainClass = config.as[String]("main-class")
   val appName = config.as[Option[String]]("app-name")
-  val driverMemory = config.as[Option[String]]("driver-memory")
-  val executorMemory = config.as[Option[String]]("executor-memory")
 
   val subnetId = config.as[Option[String]]("subnet-id")
   val usePrivateIp = config.as[Option[Boolean]]("use-private-ip").getOrElse(false)
