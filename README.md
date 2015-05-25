@@ -34,7 +34,7 @@ worker {
   executor-memory = "6G"
 }
 
-# Max number of attempts trying to connect to the machine. (default to 10, one per minute.)
+# Max number of attempts trying to connect to the machine. (default is 10, one per minute.)
 ssh-connection-attempts = 8
 
 # URL for downloading the pre-built Spark tarball.
