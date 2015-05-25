@@ -40,7 +40,7 @@ ssh-connection-attempts = 8
 # URL for downloading the pre-built Spark tarball.
 spark-tgz-url = "http://d3kbcqa49mib13.cloudfront.net/spark-1.3.1-bin-hadoop1.tgz"
 
-main-class = "core.Main"
+main-class = "mypackage.Main"
 
 # Below are optional settings
 app-name = "my-app-name"
