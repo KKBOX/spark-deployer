@@ -34,13 +34,13 @@ worker {
   executor-memory = "6G"
 }
 
-# Max number of attempts trying to connect to the machine. (default to 10, one per minute.)
+# Max number of attempts trying to connect to the machine. (default is 10, one per minute.)
 ssh-connection-attempts = 8
 
 # URL for downloading the pre-built Spark tarball.
 spark-tgz-url = "http://d3kbcqa49mib13.cloudfront.net/spark-1.3.1-bin-hadoop1.tgz"
 
-main-class = "core.Main"
+main-class = "mypackage.Main"
 
 # Below are optional settings
 app-name = "my-app-name"
@@ -58,6 +58,7 @@ use-private-ip = true
   * Since akka use random port to connect with master, the security groups should allow all the traffic between cluster machines.
   * Allow port 22 for SSH login.
   * Allow port 8080, 8081, 4040 for web console.
+  * Please check [Spark security page](http://spark.apache.org/docs/latest/security.html#configuring-ports-for-network-security) for more information about port settings.
 * Create `build.sbt` (Here we give a simple example):
 ```
 lazy val root = (project in file("."))
