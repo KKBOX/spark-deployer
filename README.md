@@ -58,6 +58,7 @@ use-private-ip = true
   * Since akka use random port to connect with master, the security groups should allow all the traffic between cluster machines.
   * Allow port 22 for SSH login.
   * Allow port 8080, 8081, 4040 for web console.
+  * Please check [Spark security page](http://spark.apache.org/docs/latest/security.html#configuring-ports-for-network-security) for more information about port settings.
 * Create `build.sbt` (Here we give a simple example):
 ```
 lazy val root = (project in file("."))
