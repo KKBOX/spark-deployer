@@ -126,13 +126,13 @@ class SparkDeployer(val clusterConf: ClusterConf) {
               s"[$name] download spark failed.",
               retryConnection = true)
 
-            //setup master ip
-            println(s"[$name] setting master ip.")
+            //setup spark-env
+            println(s"[$name] setting spark-env.")
             val sparkEnvPath = clusterConf.sparkDirName + "/conf/spark-env.sh"
             val masterIp = masterIpOpt.getOrElse(address)
             ssh(address,
-              s"echo 'SPARK_MASTER_IP=$masterIp' > $sparkEnvPath && chmod u+x $sparkEnvPath",
-              s"[$name] set master failed.")
+              s"echo -e 'SPARK_MASTER_IP=$masterIp\\nSPARK_PUBLIC_DNS=$address' > $sparkEnvPath && chmod u+x $sparkEnvPath",
+              s"[$name] set spark-env failed.")
 
             address
           }
