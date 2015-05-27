@@ -258,9 +258,11 @@ class SparkDeployer(val clusterConf: ClusterConf) {
           jar.getAbsolutePath,
           s"ec2-user@$masterAddress:~/job.jar")
         println(uploadJarCmd.mkString(" "))
-        if (uploadJarCmd.! != 0) sys.error("[rsync-error] jar upload failed.")
-
-        println(s"Jar uploaded, you can now login master and submit the job. Login command: ssh -i ${clusterConf.pem} ec2-user@$masterAddress")
+        if (uploadJarCmd.! != 0) {
+          sys.error("[rsync-error] jar upload failed.")
+        } else {
+          println(s"Jar uploaded, you can now login master and submit the job. Login command: ssh -i ${clusterConf.pem} ec2-user@$masterAddress")
+        }
     }
   }
 
