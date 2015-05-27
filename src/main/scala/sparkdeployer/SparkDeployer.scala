@@ -176,16 +176,21 @@ class SparkDeployer(val clusterConf: ClusterConf) {
                 s"[$workerName] start worker failed.")
 
               println(s"[$workerName] worker started.")
-              workerName -> "Success"
+              workerName -> Left("Success")
           }
           .recover {
-            case e: Exception => workerName -> e.toString()
+            case e: Exception => workerName -> Right(e.toString())
           }
     }
     val future = Future.sequence(futures)
 
     val statuses = Await.result(future, Duration.Inf)
-    println((Seq("Finished adding workers.") ++ statuses.map(t => t._1 + " -> " + t._2)).mkString("\n"))
+
+    if (statuses.forall(_._2.isLeft)) {
+      println(s"Finished adding ${statuses.size} workers.")
+    } else {
+      sys.error("Failed on adding some workers. The statuses are:\n" + statuses.mkString("\n"))
+    }
   }
 
   def createCluster(num: Int) = {
