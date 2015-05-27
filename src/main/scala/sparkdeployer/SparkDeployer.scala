@@ -15,35 +15,40 @@
 package sparkdeployer
 
 import java.io.File
-import awscala.ec2.EC2
-import awscala.Region0
-import com.amazonaws.services.ec2.model.EbsBlockDevice
-import com.amazonaws.services.ec2.model.BlockDeviceMapping
-import com.amazonaws.services.ec2.model.RunInstancesRequest
-import collection.JavaConverters._
-import scala.concurrent._
+
+import scala.collection.JavaConverters.setAsJavaSetConverter
+import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
-import com.amazonaws.services.ec2.model.CreateTagsRequest
-import com.amazonaws.services.ec2.model.Tag
-import awscala.ec2.Instance
-import sys.process._
+import scala.concurrent.Future
+import scala.concurrent.blocking
 import scala.concurrent.duration.Duration
+import scala.sys.process.stringSeqToProcess
 
-class SparkDeployer(val sparkConf: SparkConf) {
-  private def ec2 = EC2.at(Region0(sparkConf.region))
+import com.amazonaws.services.ec2.model.BlockDeviceMapping
+import com.amazonaws.services.ec2.model.CreateTagsRequest
+import com.amazonaws.services.ec2.model.EbsBlockDevice
+import com.amazonaws.services.ec2.model.RunInstancesRequest
+import com.amazonaws.services.ec2.model.Tag
 
-  private val masterName = sparkConf.clusterName + "-master"
-  private val workerPrefix = sparkConf.clusterName + "-worker"
+import awscala.Region0
+import awscala.ec2.EC2
+import awscala.ec2.Instance
+
+class SparkDeployer(val clusterConf: ClusterConf) {
+  private def ec2 = EC2.at(Region0(clusterConf.region))
+
+  private val masterName = clusterConf.clusterName + "-master"
+  private val workerPrefix = clusterConf.clusterName + "-worker"
 
   //ec2 machine addresses
   private def getInstanceAddress(i: Instance) =
-    if (sparkConf.usePrivateIp) {
+    if (clusterConf.usePrivateIp) {
       i.privateIpAddress
     } else {
       i.publicDnsName
     }
 
-  private def getMyInstances() = ec2.instances.filter(i => i.keyName == sparkConf.keypair && i.state.getName != "terminated")
+  private def getMyInstances() = ec2.instances.filter(i => i.keyName == clusterConf.keypair && i.state.getName != "terminated")
 
   private def getMaster() = getMyInstances().filter(i => i.getName.nonEmpty && i.name == masterName).headOption
   private def getWorkers() = getMyInstances().filter(i => i.getName.nonEmpty && i.name.startsWith(workerPrefix))
@@ -55,7 +60,7 @@ class SparkDeployer(val sparkConf: SparkConf) {
     allocateTTY: Boolean = false,
     retryConnection: Boolean = false) = blocking {
     def sshWithRetry(attempt: Int): Int = {
-      val cmd = Some(Seq("ssh", "-i", sparkConf.pem,
+      val cmd = Some(Seq("ssh", "-i", clusterConf.pem,
         "-o", "UserKnownHostsFile=/dev/null",
         "-o", "StrictHostKeyChecking=no"))
         .map(seq => if (allocateTTY) seq :+ "-tt" else seq)
@@ -67,7 +72,7 @@ class SparkDeployer(val sparkConf: SparkConf) {
         exitValue
       } else {
         val errorMessage = s"[ssh-error] attempt:$attempt - exit:$exitValue - $failedMessage"
-        if (retryConnection && attempt < sparkConf.sshConnectionAttempts) {
+        if (retryConnection && attempt < clusterConf.sshConnectionAttempts) {
           println(errorMessage)
           Thread.sleep(60000)
           sshWithRetry(attempt + 1)
@@ -90,11 +95,11 @@ class SparkDeployer(val sparkConf: SparkConf) {
             .withVolumeType("gp2")))
         .withImageId("ami-e7527ed7")
         .withInstanceType(instanceType)
-        .withKeyName(sparkConf.keypair)
+        .withKeyName(clusterConf.keypair)
         .withMaxCount(1)
         .withMinCount(1))
-      .map(req => sparkConf.securityGroupIds.map(set => req.withSecurityGroupIds(set.asJava)).getOrElse(req))
-      .map(req => sparkConf.subnetId.map(id => req.withSubnetId(id)).getOrElse(req))
+      .map(req => clusterConf.securityGroupIds.map(set => req.withSecurityGroupIds(set.asJava)).getOrElse(req))
+      .map(req => clusterConf.subnetId.map(id => req.withSubnetId(id)).getOrElse(req))
       .map {
         req =>
           println(s"[$name] creating instance.")
@@ -115,19 +120,19 @@ class SparkDeployer(val sparkConf: SparkConf) {
               .withTags(new Tag("Name", name)))
 
             //download spark
-            println(s"[$name] downloading spark (retry attempts = ${sparkConf.sshConnectionAttempts} times).")
+            println(s"[$name] downloading spark (retry attempts = ${clusterConf.sshConnectionAttempts} times).")
             ssh(address,
-              s"wget -nv ${sparkConf.sparkTgzUrl} && tar -zxf ${sparkConf.sparkTgzName}",
+              s"wget -nv ${clusterConf.sparkTgzUrl} && tar -zxf ${clusterConf.sparkTgzName}",
               s"[$name] download spark failed.",
               retryConnection = true)
 
-            //setup master ip
-            println(s"[$name] setting master ip.")
-            val sparkEnvPath = sparkConf.sparkDirName + "/conf/spark-env.sh"
+            //setup spark-env
+            println(s"[$name] setting spark-env.")
+            val sparkEnvPath = clusterConf.sparkDirName + "/conf/spark-env.sh"
             val masterIp = masterIpOpt.getOrElse(address)
             ssh(address,
-              s"echo 'SPARK_MASTER_IP=$masterIp' > $sparkEnvPath && chmod u+x $sparkEnvPath",
-              s"[$name] set master failed.")
+              s"echo -e 'SPARK_MASTER_IP=$masterIp\\nSPARK_PUBLIC_DNS=$address' > $sparkEnvPath && chmod u+x $sparkEnvPath",
+              s"[$name] set spark-env failed.")
 
             address
           }
@@ -136,15 +141,15 @@ class SparkDeployer(val sparkConf: SparkConf) {
 
   def createMaster() = {
     assert(getMaster.isEmpty, s"[$masterName] master already exists.")
-    val future = createInstance(masterName, sparkConf.masterInstanceType, sparkConf.masterDiskSize, None).map {
+    val future = createInstance(masterName, clusterConf.masterInstanceType, clusterConf.masterDiskSize, None).map {
       address =>
         //start the master
         println(s"[$masterName] staring master.")
         ssh(address,
-          s"./${sparkConf.sparkDirName}/sbin/start-master.sh",
+          s"./${clusterConf.sparkDirName}/sbin/start-master.sh",
           s"[$masterName] start master failed.")
 
-        println(s"[$masterName] master started.\nWeb UI: http://$address:8080\nLogin command: ssh -i ${sparkConf.pem} ec2-user@$address")
+        println(s"[$masterName] master started.\nWeb UI: http://$address:8080\nLogin command: ssh -i ${clusterConf.pem} ec2-user@$address")
     }
     Await.result(future, Duration.Inf)
   }
@@ -161,26 +166,31 @@ class SparkDeployer(val sparkConf: SparkConf) {
 
     val futures = (startIndex to startIndex + num - 1).map(workerPrefix + "-" + _).map {
       workerName =>
-        createInstance(workerName, sparkConf.workerInstanceType, sparkConf.workerDiskSize, Some(masterIp))
+        createInstance(workerName, clusterConf.workerInstanceType, clusterConf.workerDiskSize, Some(masterIp))
           .map {
             address =>
               //start the worker
               println(s"[$workerName] staring worker.")
               ssh(address,
-                s"./${sparkConf.sparkDirName}/bin/spark-class org.apache.spark.deploy.worker.Worker spark://$masterIp:7077 &> /dev/null &",
+                s"./${clusterConf.sparkDirName}/bin/spark-class org.apache.spark.deploy.worker.Worker spark://$masterIp:7077 &> /dev/null &",
                 s"[$workerName] start worker failed.")
 
               println(s"[$workerName] worker started.")
-              workerName -> "Success"
+              workerName -> Left("Success")
           }
           .recover {
-            case e: Exception => workerName -> e.toString()
+            case e: Exception => workerName -> Right(e.toString())
           }
     }
     val future = Future.sequence(futures)
 
     val statuses = Await.result(future, Duration.Inf)
-    println((Seq("Finished adding workers.") ++ statuses.map(t => t._1 + " -> " + t._2)).mkString("\n"))
+
+    if (statuses.forall(_._2.isLeft)) {
+      println(s"Finished adding ${statuses.size} workers.")
+    } else {
+      sys.error("Failed on adding some workers. The statuses are:\n" + statuses.mkString("\n"))
+    }
   }
 
   def createCluster(num: Int) = {
@@ -219,7 +229,7 @@ class SparkDeployer(val sparkConf: SparkConf) {
         println("No master found.")
       case Some(master) =>
         println(s"[${master.name}]")
-        println(s"login command: ssh -i ${sparkConf.pem} ec2-user@${getInstanceAddress(master)}")
+        println(s"login command: ssh -i ${clusterConf.pem} ec2-user@${getInstanceAddress(master)}")
         println(s"web ui: http://${getInstanceAddress(master)}:8080")
     }
 
@@ -238,7 +248,7 @@ class SparkDeployer(val sparkConf: SparkConf) {
       case Some(master) =>
         val masterAddress = getInstanceAddress(master)
 
-        val sshCmd = Seq("ssh", "-i", sparkConf.pem,
+        val sshCmd = Seq("ssh", "-i", clusterConf.pem,
           "-o", "UserKnownHostsFile=/dev/null",
           "-o", "StrictHostKeyChecking=no").mkString(" ")
 
@@ -248,9 +258,11 @@ class SparkDeployer(val sparkConf: SparkConf) {
           jar.getAbsolutePath,
           s"ec2-user@$masterAddress:~/job.jar")
         println(uploadJarCmd.mkString(" "))
-        if (uploadJarCmd.! != 0) sys.error("[rsync-error] jar upload failed.")
-
-        println(s"Jar uploaded, you can now login master and submit the job. Login command: ssh -i ${sparkConf.pem} ec2-user@$masterAddress")
+        if (uploadJarCmd.! != 0) {
+          sys.error("[rsync-error] jar upload failed.")
+        } else {
+          println(s"Jar uploaded, you can now login master and submit the job. Login command: ssh -i ${clusterConf.pem} ec2-user@$masterAddress")
+        }
     }
   }
 
@@ -264,12 +276,12 @@ class SparkDeployer(val sparkConf: SparkConf) {
         val submitJobCmd = Some(Seq(
           s"AWS_ACCESS_KEY_ID='${sys.env("AWS_ACCESS_KEY_ID")}'",
           s"AWS_SECRET_ACCESS_KEY='${sys.env("AWS_SECRET_ACCESS_KEY")}'",
-          s"./${sparkConf.sparkDirName}/bin/spark-submit",
-          "--class", sparkConf.mainClass,
+          s"./${clusterConf.sparkDirName}/bin/spark-submit",
+          "--class", clusterConf.mainClass,
           "--master", s"spark://$masterAddress:7077"))
-          .map(seq => sparkConf.appName.map(n => seq :+ "--name" :+ n).getOrElse(seq))
-          .map(seq => sparkConf.driverMemory.map(m => seq :+ "--driver-memory" :+ m).getOrElse(seq))
-          .map(seq => sparkConf.executorMemory.map(m => seq :+ "--executor-memory" :+ m).getOrElse(seq))
+          .map(seq => clusterConf.appName.map(n => seq :+ "--name" :+ n).getOrElse(seq))
+          .map(seq => clusterConf.driverMemory.map(m => seq :+ "--driver-memory" :+ m).getOrElse(seq))
+          .map(seq => clusterConf.executorMemory.map(m => seq :+ "--executor-memory" :+ m).getOrElse(seq))
           .map(_ :+ "job.jar")
           .map(_ ++ args)
           .get.mkString(" ")

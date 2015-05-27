@@ -20,7 +20,7 @@ import com.typesafe.config.ConfigFactory
 
 import net.ceedubs.ficus.Ficus._
 
-class SparkConf(configFile: File) {
+class ClusterConf(configFile: File) {
   val config = ConfigFactory.parseFile(configFile).resolve()
 
   val clusterName = config.as[String]("cluster-name")
@@ -59,7 +59,7 @@ class SparkConf(configFile: File) {
   val securityGroupIds = config.as[Option[Set[String]]]("security-group-ids")
 }
 
-object SparkConf {
-  def fromFile(configFile: File) = new SparkConf(configFile)
-  def fromFile(configPath: String) = new SparkConf(new File(configPath))
+object ClusterConf {
+  def fromFile(configFile: File) = new ClusterConf(configFile)
+  def fromFile(configPath: String) = new ClusterConf(new File(configPath))
 }

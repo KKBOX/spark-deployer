@@ -14,36 +14,23 @@
 
 package sparkdeployer
 
-import java.io.File
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
 import com.amazonaws.services.s3.model.DeleteObjectsRequest
-import com.typesafe.config.ConfigFactory
-import awscala.Region0
-import awscala.ec2.EC2
+import com.typesafe.config.Config
+
 import awscala.s3.Bucket
 import awscala.s3.S3
-import net.ceedubs.ficus.Ficus._
 import sbt.AutoPlugin
+import sbt.Def.macroValueIT
 import sbt.Def.spaceDelimited
-import sbt.IO
-import sbt.Keys.target
 import sbt.inputKey
 import sbt.parserToInput
-import sbt.richFile
-import sbt.settingKey
-import sbt.stringSeqToProcess
 import sbt.taskKey
-import sbtassembly.AssemblyKeys._
-import com.amazonaws.services.ec2.model.RunInstancesRequest
-import com.amazonaws.services.ec2.model.BlockDeviceMapping
-import com.amazonaws.services.ec2.model.EbsBlockDevice
-import com.typesafe.config.Config
+import sbtassembly.AssemblyKeys.assembly
 
 object SparkDeployerPlugin extends AutoPlugin {
 
   object autoImport {
-    lazy val sparkConf = taskKey[Config]("Raw configuration.")
+    lazy val sparkClusterConf = taskKey[Config]("Raw configuration.")
 
     lazy val sparkCreateMaster = taskKey[Unit]("Create master.")
     lazy val sparkAddWorkers = inputKey[Unit]("Add workers.")
@@ -65,10 +52,10 @@ object SparkDeployerPlugin extends AutoPlugin {
   import autoImport._
   override def trigger = allRequirements
 
-  lazy val sparkDeployer = new SparkDeployer(SparkConf.fromFile("spark-deployer.conf"))
+  lazy val sparkDeployer = new SparkDeployer(ClusterConf.fromFile("spark-deployer.conf"))
 
   override lazy val projectSettings = Seq(
-    sparkConf := sparkDeployer.sparkConf.config,
+    sparkClusterConf := sparkDeployer.clusterConf.config,
 
     sparkCreateMaster := sparkDeployer.createMaster(),
     sparkAddWorkers := {
