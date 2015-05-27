@@ -8,7 +8,7 @@
 * Set the environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` for AWS.
 * In your sbt project, create `project/plugins.sbt`:
 ```
-addSbtPlugin("net.pishen" % "spark-deployer" % "0.2.0")
+addSbtPlugin("net.pishen" % "spark-deployer" % "0.3.0")
 ```
 * Create the configuration file `spark-deployer.conf`:
 ```
