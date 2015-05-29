@@ -50,6 +50,7 @@ security-group-ids = ["sg-xxxxxxxx", "sg-yyyyyyyy"]
 subnet-id = "subnet-xxxxxxxx"
 use-private-ip = true
 ```
+* Currently tested instance types are `t2.medium`, `m3.medium`, and `c4.xlarge`. All the M3, C4, and C3 types should work, please report an issue if you encountered a problem.
 * More information about `spark-tgz-url`:
   * You may find one URL from Spark's website or host one by yourself.
   * You may choose an older version of Spark or different version of Hadoop, but it's not tested, use at your own risk.
