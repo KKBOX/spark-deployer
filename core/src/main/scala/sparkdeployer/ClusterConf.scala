@@ -33,6 +33,8 @@ class ClusterConf(configFile: File) {
   }
 
   val region = config.as[String]("region")
+  
+  val ami = config.as[String]("ami")
 
   val masterInstanceType = config.as[String]("master.instance-type")
   val masterDiskSize = config.as[Int]("master.disk-size")

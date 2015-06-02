@@ -93,7 +93,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
           .withEbs(new EbsBlockDevice()
             .withVolumeSize(diskSize)
             .withVolumeType("gp2")))
-        .withImageId("ami-e7527ed7")
+        .withImageId(clusterConf.ami)
         .withInstanceType(instanceType)
         .withKeyName(clusterConf.keypair)
         .withMaxCount(1)
