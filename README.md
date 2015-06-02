@@ -8,7 +8,9 @@
 * Set the environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` for AWS.
 * In your sbt project, create `project/plugins.sbt`:
 ```
-addSbtPlugin("net.pishen" % "spark-deployer" % "0.3.0")
+resolvers += Resolver.bintrayRepo("pishen", "maven")
+
+addSbtPlugin("net.pishen" % "spark-deployer" % "0.4.1")
 ```
 * Create the configuration file `spark-deployer.conf`:
 ```
@@ -18,6 +20,8 @@ keypair = "pishen"
 pem = "/home/pishen/.ssh/pishen.pem"
 
 region = "us-west-2"
+
+ami = "ami-e7527ed7"
 
 master {
   instance-type = "m3.medium"
@@ -50,6 +54,7 @@ security-group-ids = ["sg-xxxxxxxx", "sg-yyyyyyyy"]
 subnet-id = "subnet-xxxxxxxx"
 use-private-ip = true
 ```
+* The ami should be HVM EBS-Backed with Java 7 installed, you may pick one from [Amazon Linux AMI](http://aws.amazon.com/amazon-linux-ami/#Amazon_Linux_AMI_IDs) or build one by yourself.
 * Currently tested instance types are `t2.medium`, `m3.medium`, and `c4.xlarge`. All the M3, C4, and C3 types should work, please report an issue if you encountered a problem.
 * More information about `spark-tgz-url`:
   * You may find one URL from Spark's website or host one by yourself.
