@@ -1,18 +1,61 @@
 # spark-deployer
-* A sbt plugin which helps deploying [Apache Spark](http://spark.apache.org/) stand-alone cluster and submitting job.
-* Currently only support [Amazon EC2](http://aws.amazon.com/ec2/).
-* Spport up to Spark 1.3.1.
-* This project is in the experiment state, the spec may change rapidly in the future.
+* A Scala tool which helps deploying [Apache Spark](http://spark.apache.org/) stand-alone cluster and submitting job.
+* Currently only support [Amazon EC2](http://aws.amazon.com/ec2/) and Spark 1.3.1.
+* This project contains three parts, a core library, a SBT plugin, and a simple command line tool.
+* Since we're in the experiment state, the spec may change rapidly in the future.
 
-## How to use this plugin
+## How to use the SBT plugin
 * Set the environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` for AWS.
 * In your sbt project, create `project/plugins.sbt`:
 ```
 resolvers += Resolver.bintrayRepo("pishen", "maven")
 
-addSbtPlugin("net.pishen" % "spark-deployer" % "0.4.1")
+addSbtPlugin("net.pishen" % "spark-deployer" % "0.5.0")
 ```
-* Create the configuration file `spark-deployer.conf`:
+* Create the [cluster configuration file](#Cluster configuration file) `spark-deployer.conf`.
+* Create `build.sbt` (Here we give a simple example):
+```
+lazy val root = (project in file("."))
+  .settings(
+    name := "my-project-name",
+    version := "0.1",
+    scalaVersion := "2.10.5",
+    libraryDependencies ++= Seq(
+      "org.apache.spark" %% "spark-core" % "1.3.1" % "provided"
+    )
+  )
+```
+* Write your job's algorithm in `src/main/scala/mypackage/Main.scala`:
+```scala
+package mypackage
+
+import org.apache.spark.SparkConf
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+
+object Main {
+  def main(args: Array[String]) {
+    //setup spark
+    val sc = new SparkContext(new SparkConf())
+    //your algorithm 
+    sc.textFile("s3n://my-bucket/input.gz").collect().foreach(println)
+  }
+}
+```
+* Create Spark cluster by `sbt "sparkCreateCluster <number-of-workers>"`. You can also execute `sbt` first and type `sparkCreateCluster <number-of-workers>` in the sbt console. You may first type `spark` and hit TAB to see all the available commands.
+* Once created, submit your job by `sparkSubmitJob <job-args>`
+
+### Other available commands
+* `sparkCreateMaster`
+* `sparkAddWorkers <number-of-workers>` supports dynamically add more workers to an existing cluster.
+* `sparkRemoveWorkers <number-of-workers>` supports dynamically remove workers to scale down the cluster.
+* `sparkDestroyCluster`
+* `sparkShowMachines`
+* `sparkUploadJar` uploads the job's jar file to the master.
+* `sparkRemoveS3Dir <dir-name>` remove the s3 directory with the `_$folder$` folder file. (ex. `sparkRemoveS3Dir s3://bucket_name/middle_folder/target_folder`)
+
+## Cluster configuration file
+* For the library to work, you need to provide a configuration file `spark-deployer.conf`:
 ```
 cluster-name = "pishen-spark"
 
@@ -63,45 +106,5 @@ use-private-ip = true
 * More information about `security-group-ids`:
   * Since akka use random port to connect with master, the security groups should allow all the traffic between cluster machines.
   * Allow port 22 for SSH login.
-  * Allow port 8080, 8081, 4040 for web console.
+  * Allow port 8080, 8081, 4040 for web console (optional).
   * Please check [Spark security page](http://spark.apache.org/docs/latest/security.html#configuring-ports-for-network-security) for more information about port settings.
-* Create `build.sbt` (Here we give a simple example):
-```
-lazy val root = (project in file("."))
-  .settings(
-    name := "my-project-name",
-    version := "0.1",
-    scalaVersion := "2.10.5",
-    libraryDependencies ++= Seq(
-      "org.apache.spark" %% "spark-core" % "1.3.1" % "provided"
-    )
-  )
-```
-* Write your job's algorithm in `src/main/scala/mypackage/Main.scala`:
-```scala
-package mypackage
-
-import org.apache.spark.SparkConf
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
-
-object Main {
-  def main(args: Array[String]) {
-    //setup spark
-    val sc = new SparkContext(new SparkConf())
-    //your algorithm 
-    sc.textFile("s3n://my-bucket/input.gz").collect().foreach(println)
-  }
-}
-```
-* Create Spark cluster by `sbt "sparkCreateCluster <number-of-workers>"`. You can also execute `sbt` first and type `sparkCreateCluster <number-of-workers>` in the sbt console. You may first type `spark` and hit TAB to see all the available commands.
-* Once created, submit your job by `sparkSubmitJob <job-args>`
-
-## Other supported commands
-* `sparkCreateMaster`
-* `sparkAddWorkers <number-of-workers>` supports dynamically add more workers to an existing cluster.
-* `sparkRemoveWorkers <number-of-workers>` supports dynamically remove workers to scale down the cluster.
-* `sparkDestroyCluster`
-* `sparkShowMachines`
-* `sparkUploadJar` uploads the job's jar file to the master.
-* `sparkRemoveS3Dir <dir-name>` remove the s3 directory with the `_$folder$` folder file. (ex. `sparkRemoveS3Dir s3://bucket_name/middle_folder/target_folder`)
