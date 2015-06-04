@@ -12,7 +12,7 @@ resolvers += Resolver.bintrayRepo("pishen", "maven")
 
 addSbtPlugin("net.pishen" % "spark-deployer" % "0.5.0")
 ```
-* Create the [cluster configuration file](#Cluster configuration file) `spark-deployer.conf`.
+* Create the [cluster configuration file](#cluster-configuration-file) `spark-deployer.conf`.
 * Create `build.sbt` (Here we give a simple example):
 ```
 lazy val root = (project in file("."))
