@@ -54,6 +54,16 @@ object Main {
 * `sparkUploadJar` uploads the job's jar file to the master.
 * `sparkRemoveS3Dir <dir-name>` remove the s3 directory with the `_$folder$` folder file. (ex. `sparkRemoveS3Dir s3://bucket_name/middle_folder/target_folder`)
 
+## How to use the command line tool
+* Clone this project, build the jar file by `sbt cmd/assembly`. Get the output file at `cmd/target/scala-2.10/spark-deployer-cmd-assembly-x.x.x.jar`.
+* Provide a Spark job's jar file `spark-job.jar`.
+* Use the following commands to create cluster, submit job, and destroy the cluster:
+```
+java -jar spark-deployer-cmd-assembly-x.x.x.jar --create-cluster <number-of-workers>
+java -jar spark-deployer-cmd-assembly-x.x.x.jar --submit-job spark-job.jar <job-args>
+java -jar spark-deployer-cmd-assembly-x.x.x.jar --destroy-cluster
+```
+
 ## Cluster configuration file
 * For the library to work, you need to provide a configuration file `spark-deployer.conf`:
 ```
