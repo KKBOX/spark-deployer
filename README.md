@@ -57,7 +57,7 @@ object Main {
 ## How to use the command line tool
 * Clone this project, build the jar file by `sbt cmd/assembly`. Get the output file at `cmd/target/scala-2.10/spark-deployer-cmd-assembly-x.x.x.jar`.
 * Provide the [cluster configuration file](#cluster-configuration-file) `spark-deployer.conf` at the same directory with `spark-deployer-cmd-assembly-x.x.x.jar`.
-* Provide a Spark job's jar file `spark-job.jar`.
+* Provide a Spark job's jar file `spark-job.jar` (The jar file built by sbt-assembly from a Spark project).
 * Use the following commands to create cluster, submit job, and destroy the cluster:
 ```
 java -jar spark-deployer-cmd-assembly-x.x.x.jar --create-cluster <number-of-workers>
