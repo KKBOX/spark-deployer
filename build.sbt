@@ -1,6 +1,6 @@
 lazy val commonSettings = Seq(
   organization := "net.pishen",
-  version := "0.4.1",
+  version := "0.5.0",
   scalaVersion := "2.10.5",
   
   licenses += ("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0.html"))
@@ -22,24 +22,16 @@ lazy val core = (project in file("core"))
 lazy val sbt = (project in file("sbt"))
   .settings(commonSettings: _*)
   .settings(
-    sbtPlugin := true,  
-  
-    name := "spark-deployer",
-  
+    sbtPlugin := true,
+    name := "spark-deployer-sbt",
     addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.13.0"),
-    libraryDependencies ++= Seq(
-      "net.pishen" %% "spark-deployer-core" % version.value
-    ),
-  
     publishMavenStyle := false
   )
+  .dependsOn(core)
 
 lazy val cmd = (project in file("cmd"))
   .settings(commonSettings: _*)
   .settings(
-    name := "spark-deployer-cmd",
-    libraryDependencies ++= Seq(
-      "net.pishen" %% "spark-deployer-core" % version.value,
-      "org.rogach" %% "scallop"             % "0.9.5"
-    )
+    name := "spark-deployer-cmd"
   )
+  .dependsOn(core)
