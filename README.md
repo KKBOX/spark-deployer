@@ -8,8 +8,6 @@
 * Set the environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` for AWS.
 * In your sbt project, create `project/plugins.sbt`:
 ```
-resolvers += Resolver.bintrayRepo("pishen", "maven")
-
 addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "0.5.0")
 ```
 * Create the [cluster configuration file](#cluster-configuration-file) `spark-deployer.conf`.
