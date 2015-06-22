@@ -1,6 +1,6 @@
 # spark-deployer
 * A Scala tool which helps deploying [Apache Spark](http://spark.apache.org/) stand-alone cluster and submitting job.
-* Currently only support [Amazon EC2](http://aws.amazon.com/ec2/) and Spark 1.3.1.
+* Currently only support [Amazon EC2](http://aws.amazon.com/ec2/) and Spark 1.4.0.
 * This project contains three parts, a core library, a SBT plugin, and a simple command line tool.
 * Since we're in the experiment state, the spec may change rapidly in the future.
 
@@ -19,7 +19,7 @@ lazy val root = (project in file("."))
     version := "0.1",
     scalaVersion := "2.10.5",
     libraryDependencies ++= Seq(
-      "org.apache.spark" %% "spark-core" % "1.3.1" % "provided"
+      "org.apache.spark" %% "spark-core" % "1.4.0" % "provided"
     )
   )
 ```
@@ -95,7 +95,7 @@ worker {
 ssh-connection-attempts = 8
 
 # URL for downloading the pre-built Spark tarball.
-spark-tgz-url = "http://d3kbcqa49mib13.cloudfront.net/spark-1.3.1-bin-hadoop1.tgz"
+spark-tgz-url = "http://d3kbcqa49mib13.cloudfront.net/spark-1.4.0-bin-hadoop1.tgz"
 
 main-class = "mypackage.Main"
 
