@@ -14,25 +14,16 @@
 
 package sparkdeployer
 
+import awscala.Region0
+import awscala.ec2.{EC2, Instance}
+import com.amazonaws.services.ec2.model.{BlockDeviceMapping, CreateTagsRequest, EbsBlockDevice, RunInstancesRequest, Tag}
 import java.io.File
-
 import scala.collection.JavaConverters.setAsJavaSetConverter
+import scala.concurrent.{Future, blocking}
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
-import scala.concurrent.blocking
 import scala.concurrent.duration.Duration
 import scala.sys.process.stringSeqToProcess
-
-import com.amazonaws.services.ec2.model.BlockDeviceMapping
-import com.amazonaws.services.ec2.model.CreateTagsRequest
-import com.amazonaws.services.ec2.model.EbsBlockDevice
-import com.amazonaws.services.ec2.model.RunInstancesRequest
-import com.amazonaws.services.ec2.model.Tag
-
-import awscala.Region0
-import awscala.ec2.EC2
-import awscala.ec2.Instance
 
 class SparkDeployer(val clusterConf: ClusterConf) {
   private def ec2 = EC2.at(Region0(clusterConf.region))
