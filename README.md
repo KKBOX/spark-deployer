@@ -53,6 +53,7 @@ object Main {
 * `sparkRemoveS3Dir <dir-name>` remove the s3 directory with the `_$folder$` folder file. (ex. `sparkRemoveS3Dir s3://bucket_name/middle_folder/target_folder`)
 
 ## How to use the command line tool
+For the environment that couldn't install sbt, here is a command line tool (jar file) which only requires java installed.
 * Set the environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` for AWS.
 * Clone this project, build the jar file by `sbt cmd/assembly`. Get the output file at `cmd/target/scala-2.10/spark-deployer-cmd-assembly-x.x.x.jar`.
 * Provide the [cluster configuration file](#cluster-configuration-file) `spark-deployer.conf` at the same directory with `spark-deployer-cmd-assembly-x.x.x.jar`.
@@ -109,6 +110,7 @@ use-private-ip = true
 ```
 * The ami should be HVM EBS-Backed with Java 7 installed, you may pick one from [Amazon Linux AMI](http://aws.amazon.com/amazon-linux-ami/#Amazon_Linux_AMI_IDs) or build one by yourself.
 * Currently tested instance types are `t2.medium`, `m3.medium`, and `c4.xlarge`. All the M3, C4, and C3 types should work, please report an issue if you encountered a problem.
+* The `disk-size` unit is in GB. It resets the size of root partition, which is used by both OS and Spark.
 * More information about `spark-tgz-url`:
   * You may find one URL from Spark's website or host one by yourself.
   * You may choose an older version of Spark or different version of Hadoop, but it's not tested, use at your own risk.
