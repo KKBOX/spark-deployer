@@ -64,7 +64,7 @@ java -jar spark-deployer-cmd-assembly-x.x.x.jar --create-cluster <number-of-work
 java -jar spark-deployer-cmd-assembly-x.x.x.jar --submit-job spark-job.jar <job-args>
 java -jar spark-deployer-cmd-assembly-x.x.x.jar --destroy-cluster
 ```
-* To add more worker, use:
+* To add more workers, use:
 ```
 java -jar spark-deployer-cmd-assembly-x.x.x.jar --add-workers <number-of-workers>
 ```
