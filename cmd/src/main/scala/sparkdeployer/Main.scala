@@ -32,6 +32,10 @@ object Main {
 
       case "--destroy-cluster" =>
         sparkDeployer.destroyCluster()
+
+      case "--add-workers" =>
+        val num = args.tail.head.toInt
+        sparkDeployer.addWorkers(num)
     }
   }
 }
