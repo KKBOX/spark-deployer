@@ -59,6 +59,8 @@ class ClusterConf(configFile: File) {
   val subnetId = config.as[Option[String]]("subnet-id")
   val usePrivateIp = config.as[Option[Boolean]]("use-private-ip").getOrElse(false)
   val securityGroupIds = config.as[Option[Set[String]]]("security-group-ids")
+  
+  val creationSleep = config.as[Option[Int]]("creation-sleep")
 }
 
 object ClusterConf {
