@@ -15,11 +15,11 @@
 package sparkdeployer
 
 import awscala.Region0
-import awscala.ec2.{EC2, Instance}
-import com.amazonaws.services.ec2.model.{BlockDeviceMapping, CreateTagsRequest, EbsBlockDevice, RunInstancesRequest, Tag}
+import awscala.ec2.{ EC2, Instance }
+import com.amazonaws.services.ec2.model.{ BlockDeviceMapping, CreateTagsRequest, EbsBlockDevice, RunInstancesRequest, Tag }
 import java.io.File
 import scala.collection.JavaConverters.setAsJavaSetConverter
-import scala.concurrent.{Future, blocking}
+import scala.concurrent.{ Future, blocking }
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
@@ -45,11 +45,13 @@ class SparkDeployer(val clusterConf: ClusterConf) {
   private def getWorkers() = getMyInstances().filter(i => i.getName.nonEmpty && i.name.startsWith(workerPrefix))
 
   //helper
-  private def ssh(address: String,
+  private def ssh(
+    address: String,
     remoteCommand: String,
     failedMessage: String,
     allocateTTY: Boolean = false,
-    retryConnection: Boolean = false) = blocking {
+    retryConnection: Boolean = false
+  ) = blocking {
     def sshWithRetry(attempt: Int): Int = {
       val cmd = Some(Seq("ssh", "-i", clusterConf.pem,
         "-o", "UserKnownHostsFile=/dev/null",
@@ -88,7 +90,8 @@ class SparkDeployer(val clusterConf: ClusterConf) {
         .withInstanceType(instanceType)
         .withKeyName(clusterConf.keypair)
         .withMaxCount(1)
-        .withMinCount(1))
+        .withMinCount(1)
+    )
       .map(req => clusterConf.securityGroupIds.map(set => req.withSecurityGroupIds(set.asJava)).getOrElse(req))
       .map(req => clusterConf.subnetId.map(id => req.withSubnetId(id)).getOrElse(req))
       .map {
@@ -103,6 +106,9 @@ class SparkDeployer(val clusterConf: ClusterConf) {
           } else {
             val instance = instances.head
             val address = getInstanceAddress(instance)
+            
+            //sleep several seconds due to the "instance-id not found" bug of AWS
+            clusterConf.creationSleep.foreach(s => Thread.sleep(s * 1000))
 
             //name the instance
             println(s"[$name] naming instance.")
@@ -112,18 +118,22 @@ class SparkDeployer(val clusterConf: ClusterConf) {
 
             //download spark
             println(s"[$name] downloading spark (retry attempts = ${clusterConf.sshConnectionAttempts} times).")
-            ssh(address,
+            ssh(
+              address,
               s"wget -nv ${clusterConf.sparkTgzUrl} && tar -zxf ${clusterConf.sparkTgzName}",
               s"[$name] download spark failed.",
-              retryConnection = true)
+              retryConnection = true
+            )
 
             //setup spark-env
             println(s"[$name] setting spark-env.")
             val sparkEnvPath = clusterConf.sparkDirName + "/conf/spark-env.sh"
             val masterIp = masterIpOpt.getOrElse(address)
-            ssh(address,
+            ssh(
+              address,
               s"echo -e 'SPARK_MASTER_IP=$masterIp\\nSPARK_PUBLIC_DNS=$address' > $sparkEnvPath && chmod u+x $sparkEnvPath",
-              s"[$name] set spark-env failed.")
+              s"[$name] set spark-env failed."
+            )
 
             address
           }
@@ -136,9 +146,11 @@ class SparkDeployer(val clusterConf: ClusterConf) {
       address =>
         //start the master
         println(s"[$masterName] staring master.")
-        ssh(address,
+        ssh(
+          address,
           s"./${clusterConf.sparkDirName}/sbin/start-master.sh",
-          s"[$masterName] start master failed.")
+          s"[$masterName] start master failed."
+        )
 
         println(s"[$masterName] master started.\nWeb UI: http://$address:8080\nLogin command: ssh -i ${clusterConf.pem} ec2-user@$address")
     }
@@ -162,9 +174,11 @@ class SparkDeployer(val clusterConf: ClusterConf) {
             address =>
               //start the worker
               println(s"[$workerName] staring worker.")
-              ssh(address,
+              ssh(
+                address,
                 s"./${clusterConf.sparkDirName}/bin/spark-class org.apache.spark.deploy.worker.Worker spark://$masterIp:7077 &> /dev/null &",
-                s"[$workerName] start worker failed.")
+                s"[$workerName] start worker failed."
+              )
 
               println(s"[$workerName] worker started.")
               workerName -> Left("Success")
@@ -243,11 +257,13 @@ class SparkDeployer(val clusterConf: ClusterConf) {
           "-o", "UserKnownHostsFile=/dev/null",
           "-o", "StrictHostKeyChecking=no").mkString(" ")
 
-        val uploadJarCmd = Seq("rsync",
+        val uploadJarCmd = Seq(
+          "rsync",
           "--progress",
           "-ve", sshCmd,
           jar.getAbsolutePath,
-          s"ec2-user@$masterAddress:~/job.jar")
+          s"ec2-user@$masterAddress:~/job.jar"
+        )
         println(uploadJarCmd.mkString(" "))
         if (uploadJarCmd.! != 0) {
           sys.error("[rsync-error] jar upload failed.")
@@ -269,7 +285,8 @@ class SparkDeployer(val clusterConf: ClusterConf) {
           s"AWS_SECRET_ACCESS_KEY='${sys.env("AWS_SECRET_ACCESS_KEY")}'",
           s"./${clusterConf.sparkDirName}/bin/spark-submit",
           "--class", clusterConf.mainClass,
-          "--master", s"spark://$masterAddress:7077"))
+          "--master", s"spark://$masterAddress:7077"
+        ))
           .map(seq => clusterConf.appName.map(n => seq :+ "--name" :+ n).getOrElse(seq))
           .map(seq => clusterConf.driverMemory.map(m => seq :+ "--driver-memory" :+ m).getOrElse(seq))
           .map(seq => clusterConf.executorMemory.map(m => seq :+ "--executor-memory" :+ m).getOrElse(seq))

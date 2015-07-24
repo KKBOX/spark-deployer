@@ -2,7 +2,7 @@
 
 [![Join the chat at https://gitter.im/pishen/spark-deployer](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/pishen/spark-deployer?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 * A Scala tool which helps deploying [Apache Spark](http://spark.apache.org/) stand-alone cluster and submitting job.
-* Currently only support [Amazon EC2](http://aws.amazon.com/ec2/) and Spark 1.4.0.
+* Currently only support [Amazon EC2](http://aws.amazon.com/ec2/) and Spark 1.4.1.
 * This project contains three parts, a core library, a SBT plugin, and a simple command line tool.
 * Since we're in the experiment state, the spec may change rapidly in the future.
 
@@ -10,7 +10,7 @@
 * Set the environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` for AWS.
 * In your sbt project, create `project/plugins.sbt`:
 ```
-addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "0.5.1")
+addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "0.5.2")
 ```
 * Create the [cluster configuration file](#cluster-configuration-file) `spark-deployer.conf`.
 * Create `build.sbt` (Here we give a simple example):
@@ -21,7 +21,7 @@ lazy val root = (project in file("."))
     version := "0.1",
     scalaVersion := "2.10.5",
     libraryDependencies ++= Seq(
-      "org.apache.spark" %% "spark-core" % "1.4.0" % "provided"
+      "org.apache.spark" %% "spark-core" % "1.4.1" % "provided"
     )
   )
 ```
@@ -66,6 +66,10 @@ java -jar spark-deployer-cmd-assembly-x.x.x.jar --create-cluster <number-of-work
 java -jar spark-deployer-cmd-assembly-x.x.x.jar --submit-job spark-job.jar <job-args>
 java -jar spark-deployer-cmd-assembly-x.x.x.jar --destroy-cluster
 ```
+* To add more workers, use:
+```
+java -jar spark-deployer-cmd-assembly-x.x.x.jar --add-workers <number-of-workers>
+```
 
 ## Cluster configuration file
 * For the library to work, you need to provide a configuration file `spark-deployer.conf`:
@@ -98,7 +102,7 @@ worker {
 ssh-connection-attempts = 8
 
 # URL for downloading the pre-built Spark tarball.
-spark-tgz-url = "http://d3kbcqa49mib13.cloudfront.net/spark-1.4.0-bin-hadoop1.tgz"
+spark-tgz-url = "http://d3kbcqa49mib13.cloudfront.net/spark-1.4.1-bin-hadoop1.tgz"
 
 main-class = "mypackage.Main"
 
@@ -109,6 +113,9 @@ security-group-ids = ["sg-xxxxxxxx", "sg-yyyyyyyy"]
 
 subnet-id = "subnet-xxxxxxxx"
 use-private-ip = true
+
+# number of seconds to sleep right after the instance start (aws bug)
+creation-sleep = 10
 ```
 * The ami should be HVM EBS-Backed with Java 7 installed, you may pick one from [Amazon Linux AMI](http://aws.amazon.com/amazon-linux-ami/#Amazon_Linux_AMI_IDs) or build one by yourself.
 * Currently tested instance types are `t2.medium`, `m3.medium`, and `c4.xlarge`. All the M3, C4, and C3 types should work, please report an issue if you encountered a problem.
