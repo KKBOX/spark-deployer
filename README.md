@@ -2,7 +2,7 @@
 
 [![Join the chat at https://gitter.im/pishen/spark-deployer](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/pishen/spark-deployer?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 * A Scala tool which helps deploying [Apache Spark](http://spark.apache.org/) stand-alone cluster and submitting job.
-* Currently only support [Amazon EC2](http://aws.amazon.com/ec2/) and Spark 1.4.0.
+* Currently only support [Amazon EC2](http://aws.amazon.com/ec2/) and Spark 1.4.1.
 * This project contains three parts, a core library, a SBT plugin, and a simple command line tool.
 * Since we're in the experiment state, the spec may change rapidly in the future.
 
