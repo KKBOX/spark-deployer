@@ -44,6 +44,8 @@ object SparkDeployerPlugin extends AutoPlugin {
     lazy val sparkUploadJar = taskKey[Unit]("Upload job jar to master.")
     lazy val sparkSubmitJob = inputKey[Unit]("Upload and run the job directly.")
 
+    lazy val sparkPrintSparkShellCmd = taskKey[Unit]("Print command for opening spark shell in master.")
+
     //lazy val sparkLoginMaster = taskKey[Unit]("Login master with ssh.")
     //lazy val sparkShowSpaceUsage = taskKey[Unit]("Show space usage for all the instances.")
 
@@ -93,6 +95,8 @@ object SparkDeployerPlugin extends AutoPlugin {
     sparkUploadJar := sparkDeployer.uploadJar(assembly.value),
     sparkSubmitJob := sparkDeployer.submitJob(assembly.value, spaceDelimited().parsed),
 
+    sparkPrintSparkShellCmd := sparkDeployer.printSparkShellCmd(),
+
     sparkRemoveS3Dir := {
       val args = spaceDelimited().parsed
       require(args.length == 1, "Please give the directory name.")
@@ -115,5 +119,6 @@ object SparkDeployerPlugin extends AutoPlugin {
           s3.deleteObject(obj)
           println(obj.getKey + " deleted.")
       }
-    })
+    }
+  )
 }

@@ -106,7 +106,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
           } else {
             val instance = instances.head
             val address = getInstanceAddress(instance)
-            
+
             //sleep several seconds due to the "instance-id not found" bug of AWS
             clusterConf.creationSleep.foreach(s => Thread.sleep(s * 1000))
 
@@ -295,6 +295,30 @@ class SparkDeployer(val clusterConf: ClusterConf) {
           .get.mkString(" ")
 
         ssh(masterAddress, submitJobCmd, "job submission failed.", allocateTTY = true)
+    }
+  }
+
+  def printSparkShellCmd() = {
+    getMaster().foreach {
+      master =>
+        val masterAddress = getInstanceAddress(master)
+        val openShellCmd = Some(Seq(
+          s"AWS_ACCESS_KEY_ID='${sys.env("AWS_ACCESS_KEY_ID")}'",
+          s"AWS_SECRET_ACCESS_KEY='${sys.env("AWS_SECRET_ACCESS_KEY")}'",
+          s"./${clusterConf.sparkDirName}/bin/spark-shell",
+          "--master", s"spark://$masterAddress:7077"
+        ))
+          .map(seq => clusterConf.driverMemory.map(m => seq :+ "--driver-memory" :+ m).getOrElse(seq))
+          .map(seq => clusterConf.executorMemory.map(m => seq :+ "--executor-memory" :+ m).getOrElse(seq))
+          .get.mkString(" ")
+
+      val cmd = Some(Seq("ssh", "-i", clusterConf.pem,
+        "-o", "UserKnownHostsFile=/dev/null",
+        "-o", "StrictHostKeyChecking=no",
+        "-tt"))
+        .map(_ :+ s"ec2-user@$masterAddress" :+ openShellCmd)
+        .get.mkString(" ")
+      println(cmd)
     }
   }
 
