@@ -312,13 +312,13 @@ class SparkDeployer(val clusterConf: ClusterConf) {
           .map(seq => clusterConf.executorMemory.map(m => seq :+ "--executor-memory" :+ m).getOrElse(seq))
           .get.mkString(" ")
 
-      val cmd = Some(Seq("ssh", "-i", clusterConf.pem,
-        "-o", "UserKnownHostsFile=/dev/null",
-        "-o", "StrictHostKeyChecking=no",
-        "-tt"))
-        .map(_ :+ s"ec2-user@$masterAddress" :+ openShellCmd)
-        .get.mkString(" ")
-      println(cmd)
+        val cmd = Some(Seq("ssh", "-i", clusterConf.pem,
+          "-o", "UserKnownHostsFile=/dev/null",
+          "-o", "StrictHostKeyChecking=no",
+          "-tt"))
+          .map(_ :+ s"ec2-user@$masterAddress" :+ openShellCmd)
+          .get.mkString(" ")
+        println(cmd)
     }
   }
 
