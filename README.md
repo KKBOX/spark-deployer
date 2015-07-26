@@ -10,7 +10,7 @@
 * Set the environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` for AWS.
 * In your sbt project, create `project/plugins.sbt`:
 ```
-addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "0.5.2")
+addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "0.6.0")
 ```
 * Create the [cluster configuration file](#cluster-configuration-file) `spark-deployer.conf`.
 * Create `build.sbt` (Here we give a simple example):
@@ -52,6 +52,7 @@ object Main {
 * `sparkDestroyCluster`
 * `sparkShowMachines`
 * `sparkUploadJar` uploads the job's jar file to the master.
+* `sparkPrintSparkShellCmd` print a command for you to execute in terminal to login to spark-shell on master.
 * `sparkRemoveS3Dir <dir-name>` remove the s3 directory with the `_$folder$` folder file. (ex. `sparkRemoveS3Dir s3://bucket_name/middle_folder/target_folder`)
 
 ## How to use the command line tool
