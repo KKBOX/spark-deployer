@@ -131,7 +131,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
             val masterIp = masterIpOpt.getOrElse(address)
             ssh(
               address,
-              s"echo -e 'SPARK_MASTER_IP=$masterIp\\nSPARK_PUBLIC_DNS=$address' > $sparkEnvPath && chmod u+x $sparkEnvPath",
+              s"echo -e 'SPARK_MASTER_IP=$masterIp\\nSPARK_PUBLIC_DNS=$address\\nSPARK_LOCAL_IP=127.0.0.1' > $sparkEnvPath && chmod u+x $sparkEnvPath",
               s"[$name] set spark-env failed."
             )
 
