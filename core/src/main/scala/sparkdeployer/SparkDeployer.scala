@@ -105,10 +105,11 @@ class SparkDeployer(val clusterConf: ClusterConf) {
             sys.error(s"[$name] creation failed.")
           } else {
             val instance = instances.head
-            val address = getInstanceAddress(instance)
-
+            
             //sleep several seconds due to the "instance-id not found" bug of AWS
             clusterConf.creationSleep.foreach(s => Thread.sleep(s * 1000))
+            
+            val address = getInstanceAddress(instance)
 
             //name the instance
             println(s"[$name] naming instance.")
