@@ -10,7 +10,7 @@
 * Set the environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` for AWS.
 * In your sbt project, create `project/plugins.sbt`:
 ```
-addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "0.6.1")
+addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "0.7.0")
 ```
 * Create the [cluster configuration file](#cluster-configuration-file) `spark-deployer.conf`.
 * Create `build.sbt` (Here we give a simple example):
@@ -99,8 +99,9 @@ worker {
   executor-memory = "6G"
 }
 
-# Max number of attempts trying to connect to the machine. (default is 10, one per minute.)
-ssh-connection-attempts = 8
+# Max number of retry attempts for possibly failing places when creating instance.
+# (default is 10, one per 30s.)
+retry-attempts = 8
 
 # URL for downloading the pre-built Spark tarball.
 spark-tgz-url = "http://d3kbcqa49mib13.cloudfront.net/spark-1.4.1-bin-hadoop1.tgz"
