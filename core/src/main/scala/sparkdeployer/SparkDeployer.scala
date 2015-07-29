@@ -32,12 +32,14 @@ class SparkDeployer(val clusterConf: ClusterConf) {
   private val workerPrefix = clusterConf.clusterName + "-worker"
 
   //ec2 machine addresses
-  private def getInstanceAddress(i: Instance) =
-    if (clusterConf.usePrivateIp) {
+  private def getInstanceAddress(i: Instance) = {
+    val address = if (clusterConf.usePrivateIp) {
       i.privateIpAddress
     } else {
       i.publicDnsName
     }
+    if (address == null) None else Some(address)
+  }
 
   private def getMyInstances() = ec2.instances.filter(i => i.keyName == clusterConf.keypair && i.state.getName != "terminated")
 
@@ -64,10 +66,10 @@ class SparkDeployer(val clusterConf: ClusterConf) {
       if (exitValue == 0) {
         exitValue
       } else {
-        val errorMessage = s"[ssh-error] attempt:$attempt - exit:$exitValue - $failedMessage"
-        if (retryConnection && attempt < clusterConf.sshConnectionAttempts) {
+        val errorMessage = s"[ssh-error] attempt=$attempt - exit=$exitValue - $failedMessage"
+        if (retryConnection && attempt < clusterConf.retryAttempts) {
           println(errorMessage)
-          Thread.sleep(60000)
+          Thread.sleep(30000)
           sshWithRetry(attempt + 1)
         } else {
           sys.error(errorMessage)
@@ -105,20 +107,45 @@ class SparkDeployer(val clusterConf: ClusterConf) {
             sys.error(s"[$name] creation failed.")
           } else {
             val instance = instances.head
-            
-            //sleep several seconds due to the "instance-id not found" bug of AWS
-            clusterConf.creationSleep.foreach(s => Thread.sleep(s * 1000))
-            
-            val address = getInstanceAddress(instance)
 
             //name the instance
             println(s"[$name] naming instance.")
-            ec2.createTags(new CreateTagsRequest()
-              .withResources(instance.instanceId)
-              .withTags(new Tag("Name", name)))
+            def nameInstanceWithRetry(attempt: Int): Unit = blocking {
+              try {
+                ec2.createTags(new CreateTagsRequest()
+                  .withResources(instance.instanceId)
+                  .withTags(new Tag("Name", name)))
+              } catch {
+                case e: Exception =>
+                  if (attempt < clusterConf.retryAttempts) {
+                    println(s"[$name] failed naming instance - attempt=$attempt - ${e.getMessage()}")
+                    Thread.sleep(30000)
+                    nameInstanceWithRetry(attempt + 1)
+                  } else {
+                    throw e
+                  }
+              }
+            }
+            nameInstanceWithRetry(1)
+
+            //get the address of instance
+            println(s"[$name] getting instance's address.")
+            def getInstanceAddressWithRetry(attempt: Int): String = blocking {
+              getInstanceAddress(instance).getOrElse {
+                val errorMessage = s"[$name] failed getting instance's address - attempt=$attempt"
+                if (attempt < clusterConf.retryAttempts) {
+                  println(errorMessage)
+                  Thread.sleep(30000)
+                  getInstanceAddressWithRetry(attempt + 1)
+                } else {
+                  sys.error(errorMessage)
+                }
+              }
+            }
+            val address = getInstanceAddressWithRetry(1)
 
             //download spark
-            println(s"[$name] downloading spark (retry attempts = ${clusterConf.sshConnectionAttempts} times).")
+            println(s"[$name] downloading spark.")
             ssh(
               address,
               s"wget -nv ${clusterConf.sparkTgzUrl} && tar -zxf ${clusterConf.sparkTgzName}",
@@ -161,7 +188,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
   def addWorkers(num: Int) = {
     val masterOpt = getMaster()
     assert(masterOpt.nonEmpty && masterOpt.get.state.getName == "running", "Master does not exist, can't create workers.")
-    val masterIp = getInstanceAddress(masterOpt.get)
+    val masterIp = getInstanceAddress(masterOpt.get).get
 
     val startIndex = getWorkers().filter(_.state.getName != "terminated")
       .map(_.name.split("-").last.toInt)
@@ -235,15 +262,16 @@ class SparkDeployer(val clusterConf: ClusterConf) {
         println("No master found.")
       case Some(master) =>
         println(s"[${master.name}]")
-        println(s"login command: ssh -i ${clusterConf.pem} ec2-user@${getInstanceAddress(master)}")
-        println(s"web ui: http://${getInstanceAddress(master)}:8080")
+        val masterAddress = getInstanceAddress(master).getOrElse("null")
+        println(s"login command: ssh -i ${clusterConf.pem} ec2-user@$masterAddress")
+        println(s"web ui: http://$masterAddress:8080")
     }
 
     getWorkers()
       .sortBy(_.name.split("-").last.toInt)
       .foreach {
         worker =>
-          println(s"[${worker.name}] ${getInstanceAddress(worker)}")
+          println(s"[${worker.name}] ${getInstanceAddress(worker).getOrElse("null")}")
       }
   }
 
@@ -252,7 +280,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
       case None =>
         sys.error("No master found.")
       case Some(master) =>
-        val masterAddress = getInstanceAddress(master)
+        val masterAddress = getInstanceAddress(master).get
 
         val sshCmd = Seq("ssh", "-i", clusterConf.pem,
           "-o", "UserKnownHostsFile=/dev/null",
@@ -280,7 +308,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
     println("[warning] you're submitting job directly, please make sure you have a stable network connection.")
     getMaster().foreach {
       master =>
-        val masterAddress = getInstanceAddress(master)
+        val masterAddress = getInstanceAddress(master).get
         val submitJobCmd = Some(Seq(
           s"AWS_ACCESS_KEY_ID='${sys.env("AWS_ACCESS_KEY_ID")}'",
           s"AWS_SECRET_ACCESS_KEY='${sys.env("AWS_SECRET_ACCESS_KEY")}'",
@@ -302,7 +330,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
   def printSparkShellCmd() = {
     getMaster().foreach {
       master =>
-        val masterAddress = getInstanceAddress(master)
+        val masterAddress = getInstanceAddress(master).get
         val openShellCmd = Some(Seq(
           s"AWS_ACCESS_KEY_ID='${sys.env("AWS_ACCESS_KEY_ID")}'",
           s"AWS_SECRET_ACCESS_KEY='${sys.env("AWS_SECRET_ACCESS_KEY")}'",
