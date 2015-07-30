@@ -44,7 +44,7 @@ class ClusterConf(configFile: File) {
   val workerDiskSize = config.as[Int]("worker.disk-size")
   val executorMemory = config.as[Option[String]]("worker.executor-memory")
 
-  val sshConnectionAttempts = config.as[Option[Int]]("ssh-connection-attempts").getOrElse(10)
+  val retryAttempts = config.as[Option[Int]]("retry-attempts").getOrElse(10)
 
   val sparkTgzUrl = config.as[String]("spark-tgz-url")
   val sparkTgzName = {
@@ -59,8 +59,6 @@ class ClusterConf(configFile: File) {
   val subnetId = config.as[Option[String]]("subnet-id")
   val usePrivateIp = config.as[Option[Boolean]]("use-private-ip").getOrElse(false)
   val securityGroupIds = config.as[Option[Set[String]]]("security-group-ids")
-  
-  val creationSleep = config.as[Option[Int]]("creation-sleep")
 }
 
 object ClusterConf {
