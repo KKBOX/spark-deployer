@@ -66,7 +66,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
       if (exitValue == 0) {
         exitValue
       } else {
-        val errorMessage = s"[ssh-error] attempt=$attempt - exit=$exitValue - $failedMessage"
+        val errorMessage = s"[ssh-error] attempt: $attempt - exit: $exitValue - $failedMessage"
         if (retryConnection && attempt < clusterConf.retryAttempts) {
           println(errorMessage)
           Thread.sleep(30000)
@@ -118,7 +118,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
               } catch {
                 case e: Exception =>
                   if (attempt < clusterConf.retryAttempts) {
-                    println(s"[$name] failed naming instance - attempt=$attempt - ${e.getMessage()}")
+                    println(s"[$name] failed naming instance - attempt: $attempt - ${e.getMessage()}")
                     Thread.sleep(30000)
                     nameInstanceWithRetry(attempt + 1)
                   } else {
@@ -132,7 +132,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
             println(s"[$name] getting instance's address.")
             def getInstanceAddressWithRetry(attempt: Int): String = blocking {
               getInstanceAddress(instance).getOrElse {
-                val errorMessage = s"[$name] failed getting instance's address - attempt=$attempt"
+                val errorMessage = s"[$name] failed getting instance's address - attempt: $attempt"
                 if (attempt < clusterConf.retryAttempts) {
                   println(errorMessage)
                   Thread.sleep(30000)

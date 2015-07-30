@@ -115,9 +115,6 @@ security-group-ids = ["sg-xxxxxxxx", "sg-yyyyyyyy"]
 
 subnet-id = "subnet-xxxxxxxx"
 use-private-ip = true
-
-# number of seconds to sleep right after the instance start (aws bug)
-creation-sleep = 10
 ```
 * The ami should be HVM EBS-Backed with Java 7 installed, you may pick one from [Amazon Linux AMI](http://aws.amazon.com/amazon-linux-ami/#Amazon_Linux_AMI_IDs) or build one by yourself.
 * Currently tested instance types are `t2.medium`, `m3.medium`, and `c4.xlarge`. All the M3, C4, and C3 types should work, please report an issue if you encountered a problem.
