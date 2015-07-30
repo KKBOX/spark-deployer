@@ -11,6 +11,8 @@
 * In your sbt project, create `project/plugins.sbt`:
 ```
 addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "0.7.0")
+
+resolvers += Resolver.url("bintray-pishen", url("https://dl.bintray.com/pishen/maven"))(Resolver.ivyStylePatterns)
 ```
 * Create the [cluster configuration file](#cluster-configuration-file) `spark-deployer.conf`.
 * Create `build.sbt` (Here we give a simple example):

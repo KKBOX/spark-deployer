@@ -38,8 +38,7 @@ lazy val sbt = (project in file("sbt"))
     sbtPlugin := true,
     name := "spark-deployer-sbt",
     addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.13.0"),
-    publishMavenStyle := false,
-    resolvers += Resolver.url("bintray-pishen", url("https://dl.bintray.com/pishen/maven"))(Resolver.ivyStylePatterns)
+    publishMavenStyle := false
   )
   .dependsOn(core)
 
