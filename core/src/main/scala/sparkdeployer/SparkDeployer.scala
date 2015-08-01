@@ -24,6 +24,7 @@ import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.sys.process.stringSeqToProcess
+import scala.collection.JavaConverters._
 
 class SparkDeployer(val clusterConf: ClusterConf) {
   private def ec2 = EC2.at(Region0(clusterConf.region))
@@ -99,72 +100,68 @@ class SparkDeployer(val clusterConf: ClusterConf) {
       .map {
         req =>
           println(s"[$name] creating instance.")
-          blocking(ec2.runAndAwait(req))
+          ec2.runInstances(req).getReservation.getInstances.asScala.map(Instance(_)).headOption
       }
       .map {
-        instances =>
-          if (instances.isEmpty) {
-            sys.error(s"[$name] creation failed.")
-          } else {
-            val instance = instances.head
-
-            //name the instance
-            println(s"[$name] naming instance.")
-            def nameInstanceWithRetry(attempt: Int): Unit = blocking {
-              try {
-                ec2.createTags(new CreateTagsRequest()
-                  .withResources(instance.instanceId)
-                  .withTags(new Tag("Name", name)))
-              } catch {
-                case e: Exception =>
-                  if (attempt < clusterConf.retryAttempts) {
-                    println(s"[$name] failed naming instance - attempt: $attempt - ${e.getMessage()}")
-                    Thread.sleep(30000)
-                    nameInstanceWithRetry(attempt + 1)
-                  } else {
-                    throw e
-                  }
-              }
-            }
-            nameInstanceWithRetry(1)
-
-            //get the address of instance
-            println(s"[$name] getting instance's address.")
-            def getInstanceAddressWithRetry(attempt: Int): String = blocking {
-              getInstanceAddress(instance).getOrElse {
-                val errorMessage = s"[$name] failed getting instance's address - attempt: $attempt"
+        case None =>
+          sys.error(s"[$name] creation failed.")
+        case Some(instance) =>
+          //name the instance
+          println(s"[$name] naming instance.")
+          def nameInstanceWithRetry(attempt: Int): Unit = blocking {
+            try {
+              ec2.createTags(new CreateTagsRequest()
+                .withResources(instance.instanceId)
+                .withTags(new Tag("Name", name)))
+            } catch {
+              case e: Exception =>
                 if (attempt < clusterConf.retryAttempts) {
-                  println(errorMessage)
+                  println(s"[$name] failed naming instance - attempt: $attempt - ${e.getMessage()}")
                   Thread.sleep(30000)
-                  getInstanceAddressWithRetry(attempt + 1)
+                  nameInstanceWithRetry(attempt + 1)
                 } else {
-                  sys.error(errorMessage)
+                  throw e
                 }
+            }
+          }
+          nameInstanceWithRetry(1)
+
+          //get the address of instance
+          println(s"[$name] getting instance's address.")
+          def getInstanceAddressWithRetry(attempt: Int): String = blocking {
+            getInstanceAddress(instance).getOrElse {
+              val errorMessage = s"[$name] failed getting instance's address - attempt: $attempt"
+              if (attempt < clusterConf.retryAttempts) {
+                println(errorMessage)
+                Thread.sleep(30000)
+                getInstanceAddressWithRetry(attempt + 1)
+              } else {
+                sys.error(errorMessage)
               }
             }
-            val address = getInstanceAddressWithRetry(1)
-
-            //download spark
-            println(s"[$name] downloading spark.")
-            ssh(
-              address,
-              s"wget -nv ${clusterConf.sparkTgzUrl} && tar -zxf ${clusterConf.sparkTgzName}",
-              s"[$name] download spark failed.",
-              retryConnection = true
-            )
-
-            //setup spark-env
-            println(s"[$name] setting spark-env.")
-            val sparkEnvPath = clusterConf.sparkDirName + "/conf/spark-env.sh"
-            val masterIp = masterIpOpt.getOrElse(address)
-            ssh(
-              address,
-              s"echo -e 'SPARK_MASTER_IP=$masterIp\\nSPARK_PUBLIC_DNS=$address' > $sparkEnvPath && chmod u+x $sparkEnvPath",
-              s"[$name] set spark-env failed."
-            )
-
-            address
           }
+          val address = getInstanceAddressWithRetry(1)
+
+          //download spark
+          println(s"[$name] downloading spark.")
+          ssh(
+            address,
+            s"wget -nv ${clusterConf.sparkTgzUrl} && tar -zxf ${clusterConf.sparkTgzName}",
+            s"[$name] download spark failed.",
+            retryConnection = true
+          )
+
+          //setup spark-env
+          println(s"[$name] setting spark-env.")
+          val sparkEnvPath = clusterConf.sparkDirName + "/conf/spark-env.sh"
+          val masterIp = masterIpOpt.getOrElse(address)
+          ssh(
+            address,
+            s"echo -e 'SPARK_MASTER_IP=$masterIp\\nSPARK_PUBLIC_DNS=$address' > $sparkEnvPath && chmod u+x $sparkEnvPath",
+            s"[$name] set spark-env failed."
+          )
+
+          address
       }
   }
 
@@ -212,7 +209,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
               workerName -> Left("Success")
           }
           .recover {
-            case e: Exception => workerName -> Right(e.toString())
+            case e: Exception => workerName -> Right(e.toString() + " stacktrace: " + e.getStackTraceString)
           }
     }
     val future = Future.sequence(futures)
