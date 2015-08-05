@@ -39,7 +39,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
     } else {
       i.publicDnsName
     }
-    if (address == null) None else Some(address)
+    if (address == null || address == "") None else Some(address)
   }
 
   private def getMyInstances() = ec2.instances.filter(i => i.keyName == clusterConf.keypair && i.state.getName != "terminated")
@@ -129,7 +129,9 @@ class SparkDeployer(val clusterConf: ClusterConf) {
           //get the address of instance
           println(s"[$name] getting instance's address.")
           def getInstanceAddressWithRetry(attempt: Int): String = blocking {
-            getInstanceAddress(instance).getOrElse {
+            //request the new instance object each time, since the old one may contain empty address.
+            val newInstanceObj = ec2.instances.find(_.instanceId == instance.instanceId).get
+            getInstanceAddress(newInstanceObj).getOrElse {
               val errorMessage = s"[$name] failed getting instance's address - attempt: $attempt"
               if (attempt < clusterConf.retryAttempts) {
                 println(errorMessage)
