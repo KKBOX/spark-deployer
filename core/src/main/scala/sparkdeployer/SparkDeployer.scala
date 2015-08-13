@@ -25,7 +25,6 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.sys.process.stringSeqToProcess
 import scala.collection.JavaConverters._
-import java.util.Date
 
 class SparkDeployer(val clusterConf: ClusterConf) {
   private def ec2 = EC2.at(Region0(clusterConf.region))
@@ -70,7 +69,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
       } else {
         val errorMessage = s"[ssh-error] attempt: $attempt - exit: $exitValue - $failedMessage"
         if (retryConnection && attempt < clusterConf.retryAttempts) {
-          println(new Date().toString + " - " + errorMessage)
+          println(errorMessage)
           Thread.sleep(30000)
           sshWithRetry(attempt + 1)
         } else {
@@ -100,7 +99,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
       .map(req => clusterConf.subnetId.map(id => req.withSubnetId(id)).getOrElse(req))
       .map {
         req =>
-          println(new Date().toString + " - " + s"[$name] creating instance.")
+          println(s"[$name] creating instance.")
           ec2.runInstances(req).getReservation.getInstances.asScala.map(Instance(_)).headOption
       }
       .map {
@@ -108,8 +107,8 @@ class SparkDeployer(val clusterConf: ClusterConf) {
           sys.error(s"[$name] creation failed.")
         case Some(instance) =>
           //name the instance
-          println(new Date().toString + " - " + s"[$name] naming instance.")
-          def nameInstanceWithRetry(attempt: Int): Unit = blocking {
+          println(s"[$name] naming instance.")
+          def nameInstanceWithRetry(attempt: Int): Unit = {
             try {
               ec2.createTags(new CreateTagsRequest()
                 .withResources(instance.instanceId)
@@ -117,7 +116,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
             } catch {
               case e: Exception =>
                 if (attempt < clusterConf.retryAttempts) {
-                  println(new Date().toString + " - " + s"[$name] failed naming instance - attempt: $attempt - ${e.getMessage()}")
+                  println(s"[$name] failed naming instance - attempt: $attempt - ${e.getMessage()}")
                   Thread.sleep(30000)
                   nameInstanceWithRetry(attempt + 1)
                 } else {
@@ -128,14 +127,14 @@ class SparkDeployer(val clusterConf: ClusterConf) {
           nameInstanceWithRetry(1)
 
           //get the address of instance
-          println(new Date().toString + " - " + s"[$name] getting instance's address.")
-          def getInstanceAddressWithRetry(attempt: Int): String = blocking {
+          println(s"[$name] getting instance's address.")
+          def getInstanceAddressWithRetry(attempt: Int): String = {
             //request the new instance object each time, since the old one may contain empty address.
-            val newInstanceObj = ec2.instances.find(_.instanceId == instance.instanceId).get
+            val newInstanceObj = ec2.instances.find(_.instanceId == instance.instanceId).getOrElse(instance)
             getInstanceAddress(newInstanceObj).getOrElse {
               val errorMessage = s"[$name] failed getting instance's address - attempt: $attempt"
               if (attempt < clusterConf.retryAttempts) {
-                println(new Date().toString + " - " + errorMessage)
+                println(errorMessage)
                 Thread.sleep(30000)
                 getInstanceAddressWithRetry(attempt + 1)
               } else {
@@ -146,7 +145,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
           val address = getInstanceAddressWithRetry(1)
 
           //download spark
-          println(new Date().toString + " - " + s"[$name] downloading spark.")
+          println(s"[$name] downloading spark.")
           ssh(
             address,
             s"wget -nv ${clusterConf.sparkTgzUrl} && tar -zxf ${clusterConf.sparkTgzName}",
@@ -155,7 +154,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
           )
 
           //setup spark-env
-          println(new Date().toString + " - " + s"[$name] setting spark-env.")
+          println(s"[$name] setting spark-env.")
           val sparkEnvPath = clusterConf.sparkDirName + "/conf/spark-env.sh"
           val masterIp = masterIpOpt.getOrElse(address)
           ssh(
@@ -173,14 +172,14 @@ class SparkDeployer(val clusterConf: ClusterConf) {
     val future = createInstance(masterName, clusterConf.masterInstanceType, clusterConf.masterDiskSize, None).map {
       address =>
         //start the master
-        println(new Date().toString + " - " + s"[$masterName] staring master.")
+        println(s"[$masterName] staring master.")
         ssh(
           address,
           s"./${clusterConf.sparkDirName}/sbin/start-master.sh",
           s"[$masterName] start master failed."
         )
 
-        println(new Date().toString + " - " + s"[$masterName] master started.\nWeb UI: http://$address:8080\nLogin command: ssh -i ${clusterConf.pem} ec2-user@$address")
+        println(s"[$masterName] master started.\nWeb UI: http://$address:8080\nLogin command: ssh -i ${clusterConf.pem} ec2-user@$address")
     }
     Await.result(future, Duration.Inf)
   }
@@ -201,14 +200,14 @@ class SparkDeployer(val clusterConf: ClusterConf) {
           .map {
             address =>
               //start the worker
-              println(new Date().toString + " - " + s"[$workerName] staring worker.")
+              println(s"[$workerName] staring worker.")
               ssh(
                 address,
                 s"./${clusterConf.sparkDirName}/bin/spark-class org.apache.spark.deploy.worker.Worker spark://$masterIp:7077 &> /dev/null &",
                 s"[$workerName] start worker failed."
               )
 
-              println(new Date().toString + " - " + s"[$workerName] worker started.")
+              println(s"[$workerName] worker started.")
               workerName -> Left("Success")
           }
           .recover {
@@ -220,7 +219,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
     val statuses = Await.result(future, Duration.Inf)
 
     if (statuses.forall(_._2.isLeft)) {
-      println(new Date().toString + " - " + s"Finished adding ${statuses.size} workers.")
+      println(s"Finished adding ${statuses.size} workers.")
     } else {
       sys.error("Failed on adding some workers. The statuses are:\n" + statuses.mkString("\n"))
     }
