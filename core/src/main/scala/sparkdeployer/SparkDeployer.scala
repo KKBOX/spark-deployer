@@ -108,7 +108,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
         case Some(instance) =>
           //name the instance
           println(s"[$name] naming instance.")
-          def nameInstanceWithRetry(attempt: Int): Unit = blocking {
+          def nameInstanceWithRetry(attempt: Int): Unit = {
             try {
               ec2.createTags(new CreateTagsRequest()
                 .withResources(instance.instanceId)
@@ -128,9 +128,9 @@ class SparkDeployer(val clusterConf: ClusterConf) {
 
           //get the address of instance
           println(s"[$name] getting instance's address.")
-          def getInstanceAddressWithRetry(attempt: Int): String = blocking {
+          def getInstanceAddressWithRetry(attempt: Int): String = {
             //request the new instance object each time, since the old one may contain empty address.
-            val newInstanceObj = ec2.instances.find(_.instanceId == instance.instanceId).get
+            val newInstanceObj = ec2.instances.find(_.instanceId == instance.instanceId).getOrElse(instance)
             getInstanceAddress(newInstanceObj).getOrElse {
               val errorMessage = s"[$name] failed getting instance's address - attempt: $attempt"
               if (attempt < clusterConf.retryAttempts) {
