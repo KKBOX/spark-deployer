@@ -1,6 +1,6 @@
 lazy val commonSettings = Seq(
   organization := "net.pishen",
-  version := "0.7.4",
+  version := "0.8.0-SNAPSHOT",
   scalaVersion := "2.10.5",
   licenses += ("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0.html")),
   homepage := Some(url("https://github.com/pishen/spark-deployer")),

@@ -157,12 +157,13 @@ class SparkDeployer(val clusterConf: ClusterConf) {
           println(s"[$name] setting spark-env.")
           val sparkEnvPath = clusterConf.sparkDirName + "/conf/spark-env.sh"
           val masterIp = masterIpOpt.getOrElse(address)
+          val envconf = (clusterConf.env ++ Map("SPARK_MASTER_IP" -> masterIp, "SPARK_PUBLIC_DNS" -> address))
+            .map { case (k, v) => s"${k}=${v}" }.mkString("\\n")
           ssh(
             address,
-            s"echo -e 'SPARK_MASTER_IP=$masterIp\\nSPARK_PUBLIC_DNS=$address' > $sparkEnvPath && chmod u+x $sparkEnvPath",
+            s"echo -e '$envconf' > $sparkEnvPath && chmod u+x $sparkEnvPath",
             s"[$name] set spark-env failed."
           )
-
           address
       }
   }
@@ -203,7 +204,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
               println(s"[$workerName] staring worker.")
               ssh(
                 address,
-                s"./${clusterConf.sparkDirName}/bin/spark-class org.apache.spark.deploy.worker.Worker spark://$masterIp:7077 &> /dev/null &",
+                s"./${clusterConf.sparkDirName}/sbin/start-slave.sh spark://$masterIp:7077",
                 s"[$workerName] start worker failed."
               )
 
@@ -228,6 +229,54 @@ class SparkDeployer(val clusterConf: ClusterConf) {
   def createCluster(num: Int) = {
     createMaster()
     addWorkers(num)
+  }
+
+  def restartCluster() = {
+    val masterOpt = getMaster()
+    assert(masterOpt.nonEmpty && masterOpt.get.state.getName == "running", "Master does not exist, can't reload cluster.")
+    val masterIp = getInstanceAddress(masterOpt.get).get
+
+    //setup spark-env
+    val sparkEnvPath = clusterConf.sparkDirName + "/conf/spark-env.sh"
+    (getWorkers().filter(_.state.getName != "terminated")
+      .map(worker => getInstanceAddress(worker).get) :+ masterIp).foreach { ip =>
+        val envconf = (clusterConf.env ++ Map("SPARK_MASTER_IP" -> masterIp, "SPARK_PUBLIC_DNS" -> ip))
+          .map { case (k, v) => s"${k}=${v}" }.mkString("\\n")
+        ssh(
+          ip,
+          s"echo -e '$envconf' > $sparkEnvPath && chmod u+x $sparkEnvPath",
+          s"[$ip] set spark-env failed."
+        )
+      }
+
+    // for slaver stop
+    getWorkers().filter(_.state.getName != "terminated").foreach {
+      worker =>
+        println(s"[${worker.name}] stoping worker.")
+        ssh(
+          getInstanceAddress(worker).get,
+          s"./${clusterConf.sparkDirName}/sbin/stop-slave.sh spark://$masterIp:7077",
+          s"[${worker.name}] restarting worker failed."
+        )
+    }
+    // for master
+    println(s"[$masterName] restarting master.")
+    ssh(
+      masterIp,
+      s"./${clusterConf.sparkDirName}/sbin/stop-master.sh && ./${clusterConf.sparkDirName}/sbin/start-master.sh",
+      s"[$masterName] restart master failed."
+    )
+    // for slaver starting
+    getWorkers().filter(_.state.getName != "terminated").foreach {
+      worker =>
+        println(s"[${worker.name}] starting worker.")
+        ssh(
+          getInstanceAddress(worker).get,
+          s"./${clusterConf.sparkDirName}/sbin/start-slave.sh spark://$masterIp:7077",
+          s"[${worker.name}] restarting worker failed."
+        )
+    }
+
   }
 
   def removeWorkers(num: Int) = {
