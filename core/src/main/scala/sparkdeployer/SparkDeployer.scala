@@ -66,17 +66,15 @@ class SparkDeployer(val clusterConf: ClusterConf) {
     ttyAllocated: Boolean = false,
     retryEnabled: Boolean = false,
     runningMessage: Option[String] = None,
-    errorMessage: Option[String] = None,
-    stdinPiped: Boolean = false
+    errorMessage: Option[String] = None
   ) {
     def withRemoteCommand(cmd: String) = this.copy(remoteCommand = Some(cmd))
     def withTTY = this.copy(ttyAllocated = true)
     def withRetry = this.copy(retryEnabled = true)
     def withRunningMessage(msg: String) = this.copy(runningMessage = Some(msg))
     def withErrorMessage(msg: String) = this.copy(errorMessage = Some(msg))
-    def withStdinPiped = this.copy(stdinPiped = true)
 
-    def getCommand() = Some(Seq("ssh", "-i", clusterConf.pem,
+    def getCommandSeq() = Some(Seq("ssh", "-i", clusterConf.pem,
       "-o", "UserKnownHostsFile=/dev/null",
       "-o", "StrictHostKeyChecking=no"))
       .map(seq => if (ttyAllocated) seq :+ "-tt" else seq)
@@ -84,15 +82,24 @@ class SparkDeployer(val clusterConf: ClusterConf) {
       .map(_ ++ remoteCommand)
       .get
 
+    def getCommand() = {
+      val seq = getCommandSeq()
+      if (remoteCommand.isEmpty) seq.mkString(" ") else seq.init :+ s"'${remoteCommand.get.replaceAll("'", "\\\\'")}'"
+    }
+
     def run(): Int = retry({ attempts =>
-      val cmd = getCommand()
-      println(runningMessage.getOrElse("ssh-command") + s" | attempts = $attempts\\n${cmd.mkString(" ")}")
-      val exitValue = if (stdinPiped) cmd.!< else cmd.!
+      println(runningMessage.getOrElse("ssh-command") + s" | attempts = $attempts\n${getCommand()}")
+      val exitValue = getCommandSeq().!
       if (exitValue != 0) {
         sys.error(s"${errorMessage.getOrElse("ssh error")} | exitValue = $exitValue")
       } else exitValue
     }, if (retryEnabled) clusterConf.retryAttempts else 1)
   }
+
+  val awsEnvAssignment = Seq(
+    s"AWS_ACCESS_KEY_ID='${sys.env("AWS_ACCESS_KEY_ID")}'",
+    s"AWS_SECRET_ACCESS_KEY='${sys.env("AWS_SECRET_ACCESS_KEY")}'"
+  )
 
   //main functions
   private def createInstance(name: String, instanceType: String, diskSize: Int, masterIpOpt: Option[String]) = {
@@ -121,7 +128,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
         case Some(instance) =>
           //name the instance
           retry { attempts =>
-            println(s"[$name] Naming instance, attempts = $attempts")
+            println(s"[$name] Naming instance | attempts = $attempts")
             ec2.createTags(new CreateTagsRequest()
               .withResources(instance.getInstanceId)
               .withTags(new Tag("Name", name)))
@@ -133,8 +140,13 @@ class SparkDeployer(val clusterConf: ClusterConf) {
           println(s"[$name] Got instance address: $address")
 
           //download spark
+          val downloadCmd = if (clusterConf.sparkTgzUrl.startsWith("s3://")) {
+            (awsEnvAssignment ++ Seq("aws", "s3", "cp", "--only-show-errors", clusterConf.sparkTgzUrl, "./")).mkString(" ")
+          } else {
+            "wget -nv " + clusterConf.sparkTgzUrl
+          }
           SSH(address)
-            .withRemoteCommand(s"wget -nv ${clusterConf.sparkTgzUrl} && tar -zxf ${clusterConf.sparkTgzName}")
+            .withRemoteCommand(s"$downloadCmd && tar -zxf ${clusterConf.sparkTgzName}")
             .withRetry
             .withRunningMessage(s"[$name] Downloading Spark")
             .withErrorMessage(s"[$name] Failed downloading Spark")
@@ -155,7 +167,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
   }
 
   def createMaster() = {
-    assert(getMasterOpt.isEmpty, s"[$masterName] master already exists.")
+    assert(getMasterOpt.isEmpty, s"[$masterName] Master already exists.")
     val future = createInstance(masterName, clusterConf.masterInstanceType, clusterConf.masterDiskSize, None).map {
       address =>
         //start the master
@@ -248,6 +260,23 @@ class SparkDeployer(val clusterConf: ClusterConf) {
     }
   }
 
+  //build the command for spark-submit/spark-shell
+  private def getSparkCmd(
+    masterAddress: String,
+    isSparkShell: Boolean,
+    args: Seq[String]
+  ) = {
+    awsEnvAssignment
+      .:+(s"./${clusterConf.sparkDirName}/bin/${if (isSparkShell) "spark-shell" else "spark-submit"}")
+      .++(if (isSparkShell) Seq.empty else Seq("--class", clusterConf.mainClass))
+      .++(Seq("--master", s"spark://$masterAddress:7077"))
+      .++(if (isSparkShell) Seq.empty else clusterConf.appName.map(n => Seq("--name", n)).getOrElse(Seq.empty))
+      .++(clusterConf.driverMemory.map(m => Seq("--driver-memory", m)).getOrElse(Seq.empty))
+      .++(clusterConf.executorMemory.map(m => Seq("--executor-memory", m)).getOrElse(Seq.empty))
+      .++(if (isSparkShell) Seq.empty else "job.jar" +: args)
+      .mkString(" ")
+  }
+
   def showMachines() = {
     getMasterOpt() match {
       case None =>
@@ -255,7 +284,12 @@ class SparkDeployer(val clusterConf: ClusterConf) {
       case Some(master) =>
         println(s"[${master.nameOpt.get}]")
         val masterAddress = master.address
-        println(s"login command: ssh -i ${clusterConf.pem} ec2-user@$masterAddress")
+        println("login command: " + SSH(masterAddress).getCommand())
+        val sparkShellCmd = SSH(masterAddress)
+          .withRemoteCommand(getSparkCmd(masterAddress, true, Seq.empty))
+          .withTTY
+          .getCommand()
+        println(s"spark-shell command: " + sparkShellCmd)
         println(s"web ui: http://$masterAddress:8080")
     }
 
@@ -293,50 +327,18 @@ class SparkDeployer(val clusterConf: ClusterConf) {
     }
   }
 
-  private def buildSparkCmd(
-    masterAddress: String,
-    isSparkShell: Boolean,
-    args: Seq[String]
-  ) = {
-    Seq(
-      s"AWS_ACCESS_KEY_ID='${sys.env("AWS_ACCESS_KEY_ID")}'",
-      s"AWS_SECRET_ACCESS_KEY='${sys.env("AWS_SECRET_ACCESS_KEY")}'",
-      s"./${clusterConf.sparkDirName}/bin/${if (isSparkShell) "spark-shell" else "spark-submit"}"
-    )
-      .++(if (isSparkShell) Seq.empty else Seq("--class", clusterConf.mainClass))
-      .++(Seq("--master", s"spark://$masterAddress:7077"))
-      .++(if (isSparkShell) Seq.empty else clusterConf.appName.map(n => Seq("--name", n)).getOrElse(Seq.empty))
-      .++(clusterConf.driverMemory.map(m => Seq("--driver-memory", m)).getOrElse(Seq.empty))
-      .++(clusterConf.executorMemory.map(m => Seq("--executor-memory", m)).getOrElse(Seq.empty))
-      .++(if (isSparkShell) Seq.empty else "job.jar" +: args)
-      .mkString(" ")
-  }
-
   def submitJob(jar: File, args: Seq[String]) = {
     uploadJar(jar)
 
     println("[warning] You're submitting job directly, please make sure you have a stable network connection.")
     getMasterOpt().foreach { master =>
       val masterAddress = master.address
-      val submitJobCmd = buildSparkCmd(masterAddress, false, args)
+      val submitJobCmd = getSparkCmd(masterAddress, false, args)
 
       SSH(masterAddress)
         .withRemoteCommand(submitJobCmd)
         .withTTY
         .withErrorMessage("Job submission failed.")
-        .run
-    }
-  }
-
-  def loginSparkShell() = {
-    getMasterOpt().foreach { master =>
-      val masterAddress = master.address
-      val sparkShellCmd = buildSparkCmd(masterAddress, true, Seq.empty)
-
-      SSH(masterAddress)
-        .withRemoteCommand(sparkShellCmd)
-        .withTTY
-        .withStdinPiped
         .run
     }
   }

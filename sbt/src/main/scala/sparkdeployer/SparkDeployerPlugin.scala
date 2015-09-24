@@ -44,8 +44,6 @@ object SparkDeployerPlugin extends AutoPlugin {
     lazy val sparkUploadJar = taskKey[Unit]("Upload job jar to master.")
     lazy val sparkSubmitJob = inputKey[Unit]("Upload and run the job directly.")
 
-    lazy val sparkLoginSparkShell = taskKey[Unit]("Login to master and run spark-shell.")
-
     //lazy val sparkLoginMaster = taskKey[Unit]("Login master with ssh.")
     //lazy val sparkShowSpaceUsage = taskKey[Unit]("Show space usage for all the instances.")
 
@@ -94,8 +92,6 @@ object SparkDeployerPlugin extends AutoPlugin {
 
     sparkUploadJar := sparkDeployer.uploadJar(assembly.value),
     sparkSubmitJob := sparkDeployer.submitJob(assembly.value, spaceDelimited().parsed),
-
-    sparkLoginSparkShell := sparkDeployer.loginSparkShell(),
 
     sparkRemoveS3Dir := {
       val args = spaceDelimited().parsed
