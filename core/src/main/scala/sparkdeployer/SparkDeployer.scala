@@ -14,20 +14,16 @@
 
 package sparkdeployer
 
-import com.amazonaws.regions.{Region, Regions}
+import com.amazonaws.regions.Regions
 import com.amazonaws.services.ec2.AmazonEC2Client
-import com.amazonaws.services.ec2.model.Instance
-import com.amazonaws.services.ec2.model.TerminateInstancesRequest
-import com.amazonaws.services.ec2.model.{BlockDeviceMapping, CreateTagsRequest, EbsBlockDevice, RunInstancesRequest, Tag}
+import com.amazonaws.services.ec2.model.{BlockDeviceMapping, CreateTagsRequest, EbsBlockDevice, Instance, RunInstancesRequest, Tag, TerminateInstancesRequest}
 import java.io.File
-import scala.collection.JavaConverters.setAsJavaSetConverter
-import scala.concurrent.{Future, blocking}
-import scala.concurrent.Await
+import scala.collection.JavaConverters._
+import scala.concurrent.{Await, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.sys.process.stringSeqToProcess
-import scala.collection.JavaConverters._
-import scala.util.{Try, Success, Failure}
+import scala.util.{Failure, Success, Try}
 
 class SparkDeployer(val clusterConf: ClusterConf) {
   private val ec2 = new AmazonEC2Client().withRegion[AmazonEC2Client](Regions.fromName(clusterConf.region))
@@ -297,25 +293,32 @@ class SparkDeployer(val clusterConf: ClusterConf) {
     }
   }
 
+  private def buildSparkCmd(
+    masterAddress: String,
+    isSparkShell: Boolean,
+    args: Seq[String]
+  ) = {
+    Seq(
+      s"AWS_ACCESS_KEY_ID='${sys.env("AWS_ACCESS_KEY_ID")}'",
+      s"AWS_SECRET_ACCESS_KEY='${sys.env("AWS_SECRET_ACCESS_KEY")}'",
+      s"./${clusterConf.sparkDirName}/bin/${if (isSparkShell) "spark-shell" else "spark-submit"}"
+    )
+      .++(if (isSparkShell) Seq.empty else Seq("--class", clusterConf.mainClass))
+      .++(Seq("--master", s"spark://$masterAddress:7077"))
+      .++(if (isSparkShell) Seq.empty else clusterConf.appName.map(n => Seq("--name", n)).getOrElse(Seq.empty))
+      .++(clusterConf.driverMemory.map(m => Seq("--driver-memory", m)).getOrElse(Seq.empty))
+      .++(clusterConf.executorMemory.map(m => Seq("--executor-memory", m)).getOrElse(Seq.empty))
+      .++(if (isSparkShell) Seq.empty else "job.jar" +: args)
+      .mkString(" ")
+  }
+
   def submitJob(jar: File, args: Seq[String]) = {
     uploadJar(jar)
 
     println("[warning] You're submitting job directly, please make sure you have a stable network connection.")
     getMasterOpt().foreach { master =>
       val masterAddress = master.address
-      val submitJobCmd = Some(Seq(
-        s"AWS_ACCESS_KEY_ID='${sys.env("AWS_ACCESS_KEY_ID")}'",
-        s"AWS_SECRET_ACCESS_KEY='${sys.env("AWS_SECRET_ACCESS_KEY")}'",
-        s"./${clusterConf.sparkDirName}/bin/spark-submit",
-        "--class", clusterConf.mainClass,
-        "--master", s"spark://$masterAddress:7077"
-      ))
-        .map(seq => clusterConf.appName.map(n => seq :+ "--name" :+ n).getOrElse(seq))
-        .map(seq => clusterConf.driverMemory.map(m => seq :+ "--driver-memory" :+ m).getOrElse(seq))
-        .map(seq => clusterConf.executorMemory.map(m => seq :+ "--executor-memory" :+ m).getOrElse(seq))
-        .map(_ :+ "job.jar")
-        .map(_ ++ args)
-        .get.mkString(" ")
+      val submitJobCmd = buildSparkCmd(masterAddress, false, args)
 
       SSH(masterAddress)
         .withRemoteCommand(submitJobCmd)
@@ -325,26 +328,16 @@ class SparkDeployer(val clusterConf: ClusterConf) {
     }
   }
 
-  def printSparkShellCmd() = {
+  def loginSparkShell() = {
     getMasterOpt().foreach { master =>
       val masterAddress = master.address
-      val openShellCmd = Some(Seq(
-        s"AWS_ACCESS_KEY_ID='${sys.env("AWS_ACCESS_KEY_ID")}'",
-        s"AWS_SECRET_ACCESS_KEY='${sys.env("AWS_SECRET_ACCESS_KEY")}'",
-        s"./${clusterConf.sparkDirName}/bin/spark-shell",
-        "--master", s"spark://$masterAddress:7077"
-      ))
-        .map(seq => clusterConf.driverMemory.map(m => seq :+ "--driver-memory" :+ m).getOrElse(seq))
-        .map(seq => clusterConf.executorMemory.map(m => seq :+ "--executor-memory" :+ m).getOrElse(seq))
-        .get.mkString(" ")
+      val sparkShellCmd = buildSparkCmd(masterAddress, true, Seq.empty)
 
-      val cmd = Some(Seq("ssh", "-i", clusterConf.pem,
-        "-o", "UserKnownHostsFile=/dev/null",
-        "-o", "StrictHostKeyChecking=no",
-        "-tt"))
-        .map(_ :+ s"ec2-user@$masterAddress" :+ openShellCmd)
-        .get.mkString(" ")
-      println(cmd)
+      SSH(masterAddress)
+        .withRemoteCommand(sparkShellCmd)
+        .withTTY
+        .withStdinPiped
+        .run
     }
   }
 
