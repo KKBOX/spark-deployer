@@ -1,6 +1,6 @@
 lazy val commonSettings = Seq(
   organization := "net.pishen",
-  version := "0.7.4",
+  version := "0.8.0",
   scalaVersion := "2.10.5",
   licenses += ("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0.html")),
   homepage := Some(url("https://github.com/pishen/spark-deployer")),
@@ -26,8 +26,8 @@ lazy val core = (project in file("core"))
     libraryDependencies ++= Seq(
       "net.ceedubs"        %% "ficus"            % "1.0.1",
       "com.github.seratch" %% "awscala"          % "0.5.3" excludeAll(ExclusionRule(organization = "com.amazonaws")),
-      "com.amazonaws"      %  "aws-java-sdk-s3"  % "1.10.1",
-      "com.amazonaws"      %  "aws-java-sdk-ec2" % "1.10.1"
+      "com.amazonaws"      %  "aws-java-sdk-s3"  % "1.10.20",
+      "com.amazonaws"      %  "aws-java-sdk-ec2" % "1.10.20"
     )
   )
 
