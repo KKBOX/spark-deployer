@@ -84,7 +84,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
 
     def getCommand() = {
       val seq = getCommandSeq()
-      if (remoteCommand.isEmpty) seq.mkString(" ") else seq.init :+ s"'${remoteCommand.get.replaceAll("'", "\\\\'")}'"
+      if (remoteCommand.isEmpty) seq.mkString(" ") else (seq.init :+ s""""${remoteCommand.get}"""").mkString(" ")
     }
 
     def run(): Int = retry({ attempts =>
@@ -219,7 +219,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
     val statuses = Await.result(future, Duration.Inf)
 
     if (statuses.forall(_._2.isSuccess)) {
-      println(s"Finished adding ${statuses.size} workers.")
+      println(s"Finished adding ${statuses.size} worker(s).")
     } else {
       println("Failed on adding some workers. The statuses are:")
       statuses.foreach {
@@ -246,13 +246,13 @@ class SparkDeployer(val clusterConf: ClusterConf) {
   }
 
   def removeWorkers(num: Int): Unit = removeWorkers {
-    getWorkers()
+    getWorkers().filter(_.state == "running")
       .sortBy(_.nameOpt.get.split("-").last.toInt).reverse
       .take(num)
   }
 
   def destroyCluster() = {
-    removeWorkers(getWorkers())
+    removeWorkers(getWorkers().filter(_.state == "running"))
 
     getMasterOpt().foreach { master =>
       println(s"[${master.nameOpt.get}] Terminating...")
@@ -283,17 +283,17 @@ class SparkDeployer(val clusterConf: ClusterConf) {
         println("No master found.")
       case Some(master) =>
         println(s"[${master.nameOpt.get}]")
-        val masterAddress = master.address
-        println("login command: " + SSH(masterAddress).getCommand())
-        val sparkShellCmd = SSH(masterAddress)
-          .withRemoteCommand(getSparkCmd(masterAddress, true, Seq.empty))
-          .withTTY
-          .getCommand()
-        println(s"spark-shell command: " + sparkShellCmd)
-        println(s"web ui: http://$masterAddress:8080")
+        if (master.state == "running") {
+          val masterAddress = master.address
+          println("Login command: " + SSH(masterAddress).getCommand())
+          println(s"Spark-shell command: " + getSparkCmd(masterAddress, true, Seq.empty))
+          println(s"Web ui: http://$masterAddress:8080")
+        } else {
+          println("Master shutting down.")
+        }
     }
 
-    getWorkers()
+    getWorkers().filter(_.state == "running")
       .sortBy(_.nameOpt.get.split("-").last.toInt)
       .foreach { worker =>
         println(s"[${worker.nameOpt.get}] ${worker.address}")
