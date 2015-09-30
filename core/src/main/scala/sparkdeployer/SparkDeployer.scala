@@ -241,49 +241,55 @@ class SparkDeployer(val clusterConf: ClusterConf) {
   }
 
   def restartCluster() = {
-    val masterOpt = getMaster()
-    assert(masterOpt.nonEmpty && masterOpt.get.state.getName == "running", "Master does not exist, can't reload cluster.")
-    val masterIp = getInstanceAddress(masterOpt.get).get
+    val masterOpt = getMasterOpt()
+    assert(masterOpt.nonEmpty && masterOpt.get.state == "running", "Master does not exist, can't reload cluster.")
+    val masterIp = masterOpt.get.address
 
     //setup spark-env
     val sparkEnvPath = clusterConf.sparkDirName + "/conf/spark-env.sh"
-    (getWorkers().filter(_.state.getName != "terminated")
-      .map(worker => getInstanceAddress(worker).get) :+ masterIp).foreach { ip =>
+    (getWorkers().filter(_.state != "terminated")
+      .map(worker => worker.address) :+ masterIp).foreach { ip =>
         val envconf = (clusterConf.env ++ Map("SPARK_MASTER_IP" -> masterIp, "SPARK_PUBLIC_DNS" -> ip))
           .map { case (k, v) => s"${k}=${v}" }.mkString("\\n")
-        ssh(
-          ip,
-          s"echo -e '$envconf' > $sparkEnvPath && chmod u+x $sparkEnvPath",
-          s"[$ip] set spark-env failed."
-        )
+        SSH(ip)
+          .withRemoteCommand(s"echo -e '$envconf' > $sparkEnvPath && chmod u+x $sparkEnvPath")
+          .withRetry
+          .withRunningMessage(s"[$ip] Setting spark-env")
+          .withErrorMessage(s"[$ip] Failed setting spark-env")
+          .run
       }
 
     // for slaver stop
-    getWorkers().filter(_.state.getName != "terminated").foreach {
+    getWorkers().filter(_.state != "terminated").foreach {
       worker =>
-        println(s"[${worker.name}] stoping worker.")
-        ssh(
-          getInstanceAddress(worker).get,
-          s"./${clusterConf.sparkDirName}/sbin/stop-slave.sh spark://$masterIp:7077",
-          s"[${worker.name}] restarting worker failed."
-        )
+        val workerName = worker.nameOpt.get
+        println(s"[${workerName}] stoping worker.")
+        SSH(worker.address)
+          .withRemoteCommand(s"./${clusterConf.sparkDirName}/sbin/stop-slave.sh spark://$masterIp:7077")
+          .withRetry
+          .withRunningMessage(s"[${workerName}] stoping worker")
+          .withErrorMessage(s"[${workerName}] Failed stoping worker")
+          .run
     }
     // for master
     println(s"[$masterName] restarting master.")
-    ssh(
-      masterIp,
-      s"./${clusterConf.sparkDirName}/sbin/stop-master.sh && ./${clusterConf.sparkDirName}/sbin/start-master.sh",
-      s"[$masterName] restart master failed."
-    )
+    SSH(masterIp)
+      .withRemoteCommand(s"./${clusterConf.sparkDirName}/sbin/stop-master.sh && ./${clusterConf.sparkDirName}/sbin/start-master.sh")
+      .withRetry
+      .withRunningMessage(s"[${masterName}] restarting master")
+      .withErrorMessage(s"[${masterName}] Failed restarting master")
+      .run
     // for slaver starting
-    getWorkers().filter(_.state.getName != "terminated").foreach {
+    getWorkers().filter(_.state != "terminated").foreach {
       worker =>
-        println(s"[${worker.name}] starting worker.")
-        ssh(
-          getInstanceAddress(worker).get,
-          s"./${clusterConf.sparkDirName}/sbin/start-slave.sh spark://$masterIp:7077",
-          s"[${worker.name}] restarting worker failed."
-        )
+        val workerName = worker.nameOpt.get
+        println(s"[${workerName}] starting worker.")
+        SSH(worker.address)
+          .withRemoteCommand(s"./${clusterConf.sparkDirName}/sbin/start-slave.sh spark://$masterIp:7077")
+          .withRetry
+          .withRunningMessage(s"[${workerName}] starting worker")
+          .withErrorMessage(s"[${workerName}] Failed starting worker")
+          .run
     }
 
   }
