@@ -155,10 +155,10 @@ class SparkDeployer(val clusterConf: ClusterConf) {
           //setup spark-env
           val sparkEnvPath = clusterConf.sparkDirName + "/conf/spark-env.sh"
           val masterAddress = masterAddressOpt.getOrElse(address)
-          val envconf = (clusterConf.env ++ Map("SPARK_MASTER_IP" -> masterAddress, "SPARK_PUBLIC_DNS" -> address))
+          val sparkEnvConf = (clusterConf.sparkEnv ++ Map("SPARK_MASTER_IP" -> masterAddress, "SPARK_PUBLIC_DNS" -> address))
             .map { case (k, v) => s"${k}=${v}" }.mkString("\\n")
           SSH(address)
-            .withRemoteCommand(s"echo -e '$envconf' > $sparkEnvPath && chmod u+x $sparkEnvPath")
+            .withRemoteCommand(s"echo -e '$sparkEnvConf' > $sparkEnvPath && chmod u+x $sparkEnvPath")
             .withRetry
             .withRunningMessage(s"[$name] Setting spark-env")
             .withErrorMessage(s"[$name] Failed setting spark-env")
@@ -249,10 +249,10 @@ class SparkDeployer(val clusterConf: ClusterConf) {
     val sparkEnvPath = clusterConf.sparkDirName + "/conf/spark-env.sh"
     (getWorkers().filter(_.state != "terminated")
       .map(worker => worker.address) :+ masterAddress).foreach { ip =>
-        val envconf = (clusterConf.env ++ Map("SPARK_MASTER_IP" -> masterAddress, "SPARK_PUBLIC_DNS" -> ip))
+        val sparkEnvConf = (clusterConf.sparkEnv ++ Map("SPARK_MASTER_IP" -> masterAddress, "SPARK_PUBLIC_DNS" -> ip))
           .map { case (k, v) => s"${k}=${v}" }.mkString("\\n")
         SSH(ip)
-          .withRemoteCommand(s"echo -e '$envconf' > $sparkEnvPath && chmod u+x $sparkEnvPath")
+          .withRemoteCommand(s"echo -e '$sparkEnvConf' > $sparkEnvPath && chmod u+x $sparkEnvPath")
           .withRetry
           .withRunningMessage(s"[$ip] Setting spark-env")
           .withErrorMessage(s"[$ip] Failed setting spark-env")

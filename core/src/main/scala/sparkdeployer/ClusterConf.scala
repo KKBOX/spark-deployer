@@ -71,7 +71,7 @@ class ClusterConf(configFile: File) {
   val subnetId = config.as[Option[String]]("subnet-id")
   val usePrivateIp = config.as[Option[Boolean]]("use-private-ip").getOrElse(false)
   val securityGroupIds = config.as[Option[Set[String]]]("security-group-ids")
-  val env = config.as[Option[Map[String, String]]]("environment").getOrElse(Map.empty)
+  val sparkEnv = config.as[Option[Map[String, String]]]("spark-env").getOrElse(Map.empty)
 }
 
 object ClusterConf {
