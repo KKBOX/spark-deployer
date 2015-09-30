@@ -26,8 +26,8 @@ lazy val core = (project in file("core"))
     libraryDependencies ++= Seq(
       "net.ceedubs"        %% "ficus"            % "1.0.1",
       "com.github.seratch" %% "awscala"          % "0.5.3" excludeAll(ExclusionRule(organization = "com.amazonaws")),
-      "com.amazonaws"      %  "aws-java-sdk-s3"  % "1.10.1",
-      "com.amazonaws"      %  "aws-java-sdk-ec2" % "1.10.1"
+      "com.amazonaws"      %  "aws-java-sdk-s3"  % "1.10.20",
+      "com.amazonaws"      %  "aws-java-sdk-ec2" % "1.10.20"
     )
   )
 
