@@ -40,13 +40,20 @@ class SparkDeployer(val clusterConf: ClusterConf) {
     def nameOpt = i.getTags().asScala.find(_.getKey == "Name").map(_.getValue)
   }
 
-  private def getInstances() = ec2.describeInstances()
-    .getReservations().asScala.flatMap(_.getInstances.asScala).toSeq
-    .filter(i => i.getKeyName == clusterConf.keypair && i.state != "terminated")
+  //helper functions
+  private def getInstances() = {
+    ec2.describeInstances()
+      .getReservations().asScala.flatMap(_.getInstances.asScala).toSeq
+      .filter(i => i.getKeyName == clusterConf.keypair && i.state != "terminated")
+  }
 
-  private def getMasterOpt() = getInstances().find(_.nameOpt.map(_ == masterName).getOrElse(false))
+  private def getMasterOpt() = {
+    getInstances().find(_.nameOpt.map(_ == masterName).getOrElse(false))
+  }
 
-  private def getWorkers() = getInstances().filter(_.nameOpt.map(_.startsWith(workerPrefix)).getOrElse(false))
+  private def getWorkers() = {
+    getInstances().filter(_.nameOpt.map(_.startsWith(workerPrefix)).getOrElse(false))
+  }
 
   @annotation.tailrec
   private def retry[T](op: Int => T, attempts: Int): T = {
@@ -96,12 +103,33 @@ class SparkDeployer(val clusterConf: ClusterConf) {
     }, if (retryEnabled) clusterConf.retryAttempts else 1)
   }
 
-  val awsEnvAssignment = Seq(
+  private val awsEnvAssignment = Seq(
     s"AWS_ACCESS_KEY_ID='${sys.env("AWS_ACCESS_KEY_ID")}'",
     s"AWS_SECRET_ACCESS_KEY='${sys.env("AWS_SECRET_ACCESS_KEY")}'"
   )
 
-  //main functions
+  private def setupSparkEnv(address: String, masterAddressOpt: Option[String], machineName: String) = {
+    val sparkEnvPath = clusterConf.sparkDirName + "/conf/spark-env.sh"
+    val masterAddress = masterAddressOpt.getOrElse(address)
+    val sparkEnvConf = (clusterConf.sparkEnv ++ Map("SPARK_MASTER_IP" -> masterAddress, "SPARK_PUBLIC_DNS" -> address))
+      .map { case (k, v) => s"${k}=${v}" }.mkString("\\n")
+    SSH(address)
+      .withRemoteCommand(s"echo -e '$sparkEnvConf' > $sparkEnvPath && chmod u+x $sparkEnvPath")
+      .withRetry
+      .withRunningMessage(s"[${machineName}] Setting spark-env")
+      .withErrorMessage(s"[${machineName}] Failed setting spark-env")
+      .run
+  }
+
+  private def runSparkSbin(address: String, scriptName: String, args: Seq[String] = Seq.empty, machineName: String) = {
+    SSH(address)
+      .withRemoteCommand(s"./${clusterConf.sparkDirName}/sbin/${scriptName} ${args.mkString(" ")}")
+      .withRetry
+      .withRunningMessage(s"[${machineName}] ${scriptName}")
+      .withErrorMessage(s"[${machineName}] Failed ${scriptName}")
+      .run
+  }
+
   private def createInstance(name: String, instanceType: String, diskSize: Int, masterAddressOpt: Option[String]) = {
     Future(
       new RunInstancesRequest()
@@ -152,33 +180,19 @@ class SparkDeployer(val clusterConf: ClusterConf) {
             .withErrorMessage(s"[$name] Failed downloading Spark")
             .run
 
-          //setup spark-env
-          val sparkEnvPath = clusterConf.sparkDirName + "/conf/spark-env.sh"
-          val masterAddress = masterAddressOpt.getOrElse(address)
-          val sparkEnvConf = (clusterConf.sparkEnv ++ Map("SPARK_MASTER_IP" -> masterAddress, "SPARK_PUBLIC_DNS" -> address))
-            .map { case (k, v) => s"${k}=${v}" }.mkString("\\n")
-          SSH(address)
-            .withRemoteCommand(s"echo -e '$sparkEnvConf' > $sparkEnvPath && chmod u+x $sparkEnvPath")
-            .withRetry
-            .withRunningMessage(s"[$name] Setting spark-env")
-            .withErrorMessage(s"[$name] Failed setting spark-env")
-            .run
+          setupSparkEnv(address, masterAddressOpt, name)
 
           address
       }
   }
 
+  //main functions
   def createMaster() = {
     assert(getMasterOpt.isEmpty, s"[$masterName] Master already exists.")
     val future = createInstance(masterName, clusterConf.masterInstanceType, clusterConf.masterDiskSize, None).map {
       address =>
         //start the master
-        SSH(address)
-          .withRemoteCommand(s"./${clusterConf.sparkDirName}/sbin/start-master.sh")
-          .withRetry
-          .withRunningMessage(s"[$masterName] Starting master")
-          .withErrorMessage(s"[$masterName] Failed starting master")
-          .run
+        runSparkSbin(address, "start-master.sh", Seq.empty, masterName)
 
         println(s"[$masterName] Master started.\nWeb UI: http://$address:8080\nLogin command: ssh -i ${clusterConf.pem} ec2-user@$address")
     }
@@ -202,12 +216,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
         createInstance(workerName, clusterConf.workerInstanceType, clusterConf.workerDiskSize, Some(masterAddress))
           .map { address =>
             //start the worker
-            SSH(address)
-              .withRemoteCommand(s"./${clusterConf.sparkDirName}/sbin/start-slave.sh spark://$masterAddress:7077")
-              .withRetry
-              .withRunningMessage(s"[$workerName] Starting worker")
-              .withErrorMessage(s"[$workerName] Failed starting worker")
-              .run
+            runSparkSbin(address, "start-slave.sh", Seq(s"spark://$masterAddress:7077"), workerName)
 
             println(s"[$workerName] Worker started.")
             workerName -> Try("OK")
@@ -246,57 +255,25 @@ class SparkDeployer(val clusterConf: ClusterConf) {
     val masterAddress = masterOpt.get.address
 
     //setup spark-env
-    val sparkEnvPath = clusterConf.sparkDirName + "/conf/spark-env.sh"
-    (getWorkers().filter(_.state != "terminated")
-      .map(worker => worker.address) :+ masterAddress).foreach { ip =>
-        val sparkEnvConf = (clusterConf.sparkEnv ++ Map("SPARK_MASTER_IP" -> masterAddress, "SPARK_PUBLIC_DNS" -> ip))
-          .map { case (k, v) => s"${k}=${v}" }.mkString("\\n")
-        SSH(ip)
-          .withRemoteCommand(s"echo -e '$sparkEnvConf' > $sparkEnvPath && chmod u+x $sparkEnvPath")
-          .withRetry
-          .withRunningMessage(s"[$ip] Setting spark-env")
-          .withErrorMessage(s"[$ip] Failed setting spark-env")
-          .run
-      }
-
-    // for slaver stop
-    getWorkers().filter(_.state == "running").foreach { worker =>
-        stopSlave(worker.address, worker.nameOpt.get, s"spark://${masterAddress}:7077")
-    }
-    // for master
-    stopMaster(masterAddress, masterName)
-    startMaster(masterAddress, masterName)
-    // for slaver starting
-    getWorkers().filter(_.state == "running").foreach { worker =>
-        startSlave(worker.address, worker.nameOpt.get, s"spark://${masterAddress}:7077")
+    getWorkers().filter(_.state == "running").++(masterOpt).foreach {
+      i => setupSparkEnv(i.address, Some(masterAddress), i.nameOpt.get)
     }
 
-  }
+    //stop workers
+    getWorkers().filter(_.state == "running").foreach {
+      worker => runSparkSbin(worker.address, "stop-slave.sh", Seq.empty, worker.nameOpt.get)
+    }
 
-  private def runSparkCommand(address: String, name: String, scriptName: String, args: String = ""): Unit = {
-    SSH(address)
-      .withRemoteCommand(s"./${clusterConf.sparkDirName}/sbin/${scriptName}.sh ${args}")
-      .withRetry
-      .withRunningMessage(s"[${name}] ${scriptName}")
-      .withErrorMessage(s"[${name}] Failed ${scriptName}")
-      .run
-    println(s"[${name}] ${scriptName} completed.")
-  }
+    //stop master
+    runSparkSbin(masterAddress, "stop-master.sh", Seq.empty, masterName)
 
-  private def startMaster(address: String, name: String): Unit = {
-      runSparkCommand(address, name, "start-master")
-  }
+    //start master
+    runSparkSbin(masterAddress, "start-master.sh", Seq.empty, masterName)
 
-  private def stopMaster(address: String, name: String): Unit = {
-      runSparkCommand(address, name, "stop-master")
-  }
-
-  private def startSlave(address: String, name: String, masterAddress: String): Unit = {
-      runSparkCommand(address, name, "start-slave", masterAddress)
-  }
-
-  private def stopSlave(address: String, name: String, masterAddress: String): Unit = {
-      runSparkCommand(address, name, "stop-slave", masterAddress)
+    //start workers
+    getWorkers().filter(_.state == "running").foreach {
+      worker => runSparkSbin(worker.address, "start-slave.sh", Seq(s"spark://${masterAddress}:7077"), worker.nameOpt.get)
+    }
   }
 
   private def removeWorkers(workers: Seq[Instance]): Unit = {
