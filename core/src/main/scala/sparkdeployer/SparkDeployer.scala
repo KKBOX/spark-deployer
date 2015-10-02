@@ -279,6 +279,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
   private def removeWorkers(workers: Seq[Instance]): Unit = {
     workers.foreach { worker =>
       println(s"[${worker.nameOpt.get}] Terminating...")
+      runSparkSbin(worker.address, "stop-slave.sh", Seq.empty, worker.nameOpt.get)
       ec2.terminateInstances(new TerminateInstancesRequest().withInstanceIds(worker.getInstanceId))
     }
   }

@@ -23,7 +23,7 @@ project-root
 ```
 * Write one line in `project/plugins.sbt`:
 ```
-addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "0.8.0")
+addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "0.9.0")
 ```
 * Write your cluster configuration in `spark-deployer.conf` (see the [example](#cluster-configuration-file) below).
 * Write your Spark project's `build.sbt` (Here we give a simple example):
@@ -63,6 +63,7 @@ object Main {
 * `sparkAddWorkers <number-of-workers>` supports dynamically add more workers to an existing cluster.
 * `sparkRemoveWorkers <number-of-workers>` supports dynamically remove workers to scale down the cluster.
 * `sparkDestroyCluster` terminates all the nodes in the cluster.
+* `sparkRestartCluster` restart the cluster with new settings from `spark-env` without recreating the machines.
 * `sparkShowMachines` shows the machine addresses with commands to login master and execute spark-shell on it.
 * `sparkUploadJar` uploads the job's jar file to master node.
 * `sparkRemoveS3Dir <dir-name>` remove the s3 directory with the `_$folder$` folder file. (ex. `sparkRemoveS3Dir s3://bucket_name/middle_folder/target_folder`)
@@ -120,6 +121,11 @@ main-class = "mypackage.Main"
 
 # subnet-id = "subnet-xxxxxxxx"
 # use-private-ip = true
+
+# spark-env {
+#   SPARK_WORKER_CORES = "3"
+#   SPARK_WORKER_MEMORY = "6G"
+# }
 ```
 * You can provide your own `ami`, the image should be HVM EBS-Backed with Java 7+ installed.
 * Currently tested `instance-type`s are `t2.medium`, `m3.medium`, and `c4.xlarge`. All the M3, M4, C3, and C4 types should work, please report an issue if you encountered a problem.
@@ -136,3 +142,4 @@ main-class = "mypackage.Main"
   * Allow port 22 for SSH login.
   * Allow port 8080, 8081, 4040 for web console (optional).
   * Please check [Spark security page](http://spark.apache.org/docs/latest/security.html#configuring-ports-for-network-security) for more information about port settings.
+* `spark-env` adds the additional Spark settings to `conf/spark-env.sh` on each node. Note that `SPARK_MASTER_IP`, `SPARK_MASTER_PORT`, and `SPARK_PUBLIC_DNS` are hard-coded for now.
