@@ -34,7 +34,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
   implicit class InstanceWrapper(i: Instance) {
     def address = {
       val address = if (clusterConf.usePrivateIp) i.getPrivateIpAddress() else i.getPublicIpAddress()
-      if (address == null) sys.error("no address found") else address
+      if (address == null) sys.error("Instance's address not found") else address
     }
     def state = i.getState().getName()
     def nameOpt = i.getTags().asScala.find(_.getKey == "Name").map(_.getValue)
@@ -164,8 +164,13 @@ class SparkDeployer(val clusterConf: ClusterConf) {
 
           //get the address of instance
           //TODO may not get the address here, need more testing
-          val address = instance.address
-          println(s"[$name] Got instance address: $address")
+          val address = retry { attempts =>
+            println(s"[$name] Getting instance's address | attempts = $attempts")
+            getInstances().find(_.nameOpt.map(_ == name).getOrElse(false)) match {
+              case None => sys.error("Instance not found when getting address")
+              case Some(i) => i.address
+            }
+          }
 
           //download spark
           val downloadCmd = if (clusterConf.sparkTgzUrl.startsWith("s3://")) {
