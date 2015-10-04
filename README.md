@@ -23,7 +23,7 @@ project-root
 ```
 * Write one line in `project/plugins.sbt`:
 ```
-addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "0.9.0")
+addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "0.9.1")
 ```
 * Write your cluster configuration in `spark-deployer.conf` (see the [example](#cluster-configuration-file) below).
 * Write your Spark project's `build.sbt` (Here we give a simple example):
