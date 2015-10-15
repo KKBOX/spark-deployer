@@ -120,6 +120,112 @@ class SparkDeployer(val clusterConf: ClusterConf) {
       .withErrorMessage(s"[${machineName}] Failed setting spark-env")
       .run
   }
+  
+  private def setupHiveSite(address: String, masterAddressOpt: Option[String], machineName: String, hiveWarehouseRaw: String) = {
+    val hiveSitePath = clusterConf.sparkDirName + "/conf/hive-site.xml"
+    val refinedHiveWarehouse = if(hiveWarehouseRaw == "hdfs"){
+      s"hdfs://${masterAddressOpt.getOrElse(address)}:9000/hive_warehouse/"
+    } else hiveWarehouseRaw
+    
+    val content = s"""
+      <configuration>
+        <property>
+          <name>javax.jdo.option.ConnectionURL</name>
+          <value>jdbc:derby:;databaseName=/home/ec2-user/hive/metastore_db;create=true</value>
+        </property>
+        <property>
+          <name>hive.metastore.warehouse.dir</name>
+          <value>${refinedHiveWarehouse}</value>
+        </property>
+      </configuration>
+      """.split("\n").mkString
+    
+    SSH(address)
+      .withRemoteCommand(s"echo -e '${content}' > $hiveSitePath")
+      .withRetry
+      .withRunningMessage(s"[${machineName}] Setting hive-site.xml")
+      .withErrorMessage(s"[${machineName}] Failed setting hive-site.xml")
+      .run
+  }
+  
+  private def setupHdfs(address: String, masterAddressOpt: Option[String], machineName: String) = {
+    //download hadoop
+    SSH(address)
+      .withRemoteCommand(s"wget -nv ${clusterConf.hadoopTgzUrl} && tar -zxf ${clusterConf.hadoopTgzName}")
+      .withRetry
+      .withRunningMessage(s"[$machineName] Downloading hadoop")
+      .withErrorMessage(s"[$machineName] Filed downloading hadoop")
+      .run
+    
+    //setup core-site.xml
+    val coreSitePath = clusterConf.hadoopDirName.get + "/etc/hadoop/core-site.xml"
+    val coreSite = s"""
+      <configuration>
+        <property>
+          <name>fs.defaultFS</name>
+          <value>hdfs://${masterAddressOpt.getOrElse(address)}:9000</value>
+        </property>
+        <property>
+          <name>hadoop.tmp.dir</name>
+          <value>file:/tmp/hadoop-tmp</value>
+        </property>
+      </configuration>
+      """.split("\n").mkString
+    
+    SSH(address).withRemoteCommand(s"echo -e '${coreSite}' > $coreSitePath")
+      .withRetry
+      .withRunningMessage(s"[${machineName}] Setting core-site.xml")
+      .withErrorMessage(s"[${machineName}] Failed setting core-site.xml")
+      .run
+    
+    //setup hdfs-site.xml
+    val hdfsSitePath = clusterConf.hadoopDirName.get + "/etc/hadoop/hdfs-site.xml"
+    val hdfsSite = """
+      <configuration>
+        <property>
+          <name>dfs.namenode.name.dir</name>
+          <value>file:/home/ec2-user/hdfs/name</value>
+        </property>
+        <property>
+          <name>dfs.datanode.data.dir</name>
+          <value>file:/home/ec2-user/hdfs/data</value>
+        </property>
+        <property>
+          <name>dfs.replication</name>
+          <value>2</value>
+        </property>
+      </configuration>
+      """.split("\n").mkString
+      
+    SSH(address).withRemoteCommand(s"echo -e '${hdfsSite}' > $hdfsSitePath")
+      .withRetry
+      .withRunningMessage(s"[${machineName}] Setting hdfs-site.xml")
+      .withErrorMessage(s"[${machineName}] Failed setting hdfs-site.xml")
+      .run
+    
+    //format hdfs and start namenode if on master
+    masterAddressOpt match {
+      case Some(masterAddress) =>
+        SSH(masterAddress)
+          .withRemoteCommand(s"./${clusterConf.hadoopDirName.get}/bin/hdfs namenode -format")
+          .withRunningMessage(s"[$machineName] Formatting hdfs")
+          .withErrorMessage(s"[$machineName] Failed formatting hdfs")
+          .run
+          
+        SSH(masterAddress)
+          .withRemoteCommand(s"./${clusterConf.hadoopDirName.get}/sbin/hadoop-daemon.sh --config /home/ec2-user/${clusterConf.hadoopDirName.get}/etc/hadoop --script hdfs start namenode")
+          .withRunningMessage(s"[$machineName] Starting namenode")
+          .withErrorMessage(s"[$machineName] Failed starting namenode")
+          .run
+        
+      case None =>
+        SSH(address)
+          .withRemoteCommand(s"./${clusterConf.hadoopDirName.get}/sbin/hadoop-daemon.sh --config /home/ec2-user/${clusterConf.hadoopDirName.get}/etc/hadoop --script hdfs start datanode")
+          .withRunningMessage(s"[$machineName] Starting datanode")
+          .withErrorMessage(s"[$machineName] Failed starting datanode")
+          .run
+    }
+  }
 
   private def runSparkSbin(address: String, scriptName: String, args: Seq[String] = Seq.empty, machineName: String) = {
     SSH(address)
@@ -186,6 +292,10 @@ class SparkDeployer(val clusterConf: ClusterConf) {
             .run
 
           setupSparkEnv(address, masterAddressOpt, name)
+          
+          clusterConf.hiveWarehouse.foreach(v => setupHiveSite(address, masterAddressOpt, name, v))
+          
+          clusterConf.hadoopTgzUrl.foreach(_ => setupHdfs(address, masterAddressOpt, name))
 
           address
       }
