@@ -151,7 +151,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
   private def setupHdfs(address: String, masterAddressOpt: Option[String], machineName: String) = {
     //download hadoop
     SSH(address)
-      .withRemoteCommand(s"wget -nv ${clusterConf.hadoopTgzUrl} && tar -zxf ${clusterConf.hadoopTgzName}")
+      .withRemoteCommand(s"wget -nv ${clusterConf.hadoopTgzUrl.get} && tar -zxf ${clusterConf.hadoopTgzName}")
       .withRetry
       .withRunningMessage(s"[$machineName] Downloading hadoop")
       .withErrorMessage(s"[$machineName] Filed downloading hadoop")
