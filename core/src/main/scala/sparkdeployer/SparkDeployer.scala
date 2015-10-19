@@ -150,8 +150,13 @@ class SparkDeployer(val clusterConf: ClusterConf) {
   
   private def setupHdfs(address: String, masterAddressOpt: Option[String], machineName: String) = {
     //download hadoop
+    val downloadCmd = if (clusterConf.hadoopTgzUrl.get.startsWith("s3://")) {
+      (awsEnvAssignment ++ Seq("aws", "s3", "cp", "--only-show-errors", clusterConf.hadoopTgzUrl.get, "./")).mkString(" ")
+    } else {
+      "wget -nv " + clusterConf.sparkTgzUrl
+    }
     SSH(address)
-      .withRemoteCommand(s"wget -nv ${clusterConf.hadoopTgzUrl.get} && tar -zxf ${clusterConf.hadoopTgzName.get}")
+      .withRemoteCommand(s"$downloadCmd && tar -zxf ${clusterConf.hadoopTgzName.get}")
       .withRetry
       .withRunningMessage(s"[$machineName] Downloading hadoop")
       .withErrorMessage(s"[$machineName] Filed downloading hadoop")
@@ -205,20 +210,20 @@ class SparkDeployer(val clusterConf: ClusterConf) {
     
     //format hdfs and start namenode if on master
     masterAddressOpt match {
-      case Some(masterAddress) =>
-        SSH(masterAddress)
+      case None =>
+        SSH(address)
           .withRemoteCommand(s"./${clusterConf.hadoopDirName.get}/bin/hdfs namenode -format")
           .withRunningMessage(s"[$machineName] Formatting hdfs")
           .withErrorMessage(s"[$machineName] Failed formatting hdfs")
           .run
           
-        SSH(masterAddress)
+        SSH(address)
           .withRemoteCommand(s"./${clusterConf.hadoopDirName.get}/sbin/hadoop-daemon.sh --config /home/ec2-user/${clusterConf.hadoopDirName.get}/etc/hadoop --script hdfs start namenode")
           .withRunningMessage(s"[$machineName] Starting namenode")
           .withErrorMessage(s"[$machineName] Failed starting namenode")
           .run
         
-      case None =>
+      case Some(masterAddress) =>
         SSH(address)
           .withRemoteCommand(s"./${clusterConf.hadoopDirName.get}/sbin/hadoop-daemon.sh --config /home/ec2-user/${clusterConf.hadoopDirName.get}/etc/hadoop --script hdfs start datanode")
           .withRunningMessage(s"[$machineName] Starting datanode")
