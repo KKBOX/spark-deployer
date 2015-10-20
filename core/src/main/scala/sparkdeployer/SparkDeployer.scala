@@ -210,9 +210,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
 
           setupSparkEnv(address, masterAddressOpt, name)
           
-          clusterConf.hiveWarehouse.foreach(v => setupHiveSite(address, masterAddressOpt, name, v))
-          
-          clusterConf.hadoopTgzUrl.foreach(_ => setupHdfs(address, masterAddressOpt, name))
+          setupHiveSite(address, name)
 
           address
       }
