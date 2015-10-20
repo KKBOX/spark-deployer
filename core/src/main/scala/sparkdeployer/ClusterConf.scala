@@ -74,10 +74,6 @@ class ClusterConf(configFile: File) {
   val sparkEnv = config.as[Option[Map[String, String]]]("spark-env").getOrElse(Map.empty)
   
   val hiveWarehouse = config.as[Option[String]]("hive.warehouse")
-  
-  val hadoopTgzUrl = config.as[Option[String]]("hadoop-tgz-url")
-  val hadoopTgzName = hadoopTgzUrl.map(_.split("/").last)
-  val hadoopDirName = hadoopTgzName.map(_.dropRight(4))
 }
 
 object ClusterConf {
