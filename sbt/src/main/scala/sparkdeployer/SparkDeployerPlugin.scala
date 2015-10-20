@@ -49,6 +49,12 @@ object SparkDeployerPlugin extends AutoPlugin {
 
     lazy val sparkRemoveS3Dir = inputKey[Unit]("Remove the s3 directory include _$folder$ postfix file.")
     lazy val sparkRestartCluster = taskKey[Unit]("Restart spark master/worker with new environment variables.")
+    
+    lazy val sparkStopInstances = taskKey[Unit]("Stop Spark instances.")
+    lazy val sparkStartInstances = taskKey[Unit]("Start Spark instances.")
+    
+    lazy val sparkStopCluster = taskKey[Unit]("Stop Spark cluster.")
+    lazy val sparkStartCluster = taskKey[Unit]("Start Spark cluster.")
   }
   import autoImport._
   override def trigger = allRequirements
@@ -117,6 +123,10 @@ object SparkDeployerPlugin extends AutoPlugin {
           println(obj.getKey + " deleted.")
       }
     },
-    sparkRestartCluster := sparkDeployer.restartCluster()
+    sparkRestartCluster := sparkDeployer.restartCluster(),
+    sparkStopInstances := sparkDeployer.stopInstances(),
+    sparkStartInstances := sparkDeployer.startInstances(),
+    sparkStopCluster := sparkDeployer.stopCluster(),
+    sparkStartCluster := sparkDeployer.startCluster()
   )
 }

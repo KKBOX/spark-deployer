@@ -16,6 +16,8 @@ package sparkdeployer
 
 import com.amazonaws.regions.Regions
 import com.amazonaws.services.ec2.AmazonEC2Client
+import com.amazonaws.services.ec2.model.StartInstancesRequest
+import com.amazonaws.services.ec2.model.StopInstancesRequest
 import com.amazonaws.services.ec2.model.{BlockDeviceMapping, CreateTagsRequest, EbsBlockDevice, Instance, RunInstancesRequest, Tag, TerminateInstancesRequest}
 import java.io.File
 import scala.collection.JavaConverters._
@@ -120,13 +122,13 @@ class SparkDeployer(val clusterConf: ClusterConf) {
       .withErrorMessage(s"[${machineName}] Failed setting spark-env")
       .run
   }
-  
+
   private def setupHiveSite(address: String, masterAddressOpt: Option[String], machineName: String, hiveWarehouseRaw: String) = {
     val hiveSitePath = clusterConf.sparkDirName + "/conf/hive-site.xml"
-    val refinedHiveWarehouse = if(hiveWarehouseRaw == "hdfs"){
+    val refinedHiveWarehouse = if (hiveWarehouseRaw == "hdfs") {
       s"hdfs://${masterAddressOpt.getOrElse(address)}:9000/hive_warehouse/"
     } else hiveWarehouseRaw
-    
+
     val content = s"""
       <configuration>
         <property>
@@ -139,7 +141,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
         </property>
       </configuration>
       """.split("\n").mkString
-    
+
     SSH(address)
       .withRemoteCommand(s"echo -e '${content}' > $hiveSitePath")
       .withRetry
@@ -147,7 +149,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
       .withErrorMessage(s"[${machineName}] Failed setting hive-site.xml")
       .run
   }
-  
+
   private def setupHdfs(address: String, masterAddressOpt: Option[String], machineName: String) = {
     //download hadoop
     val downloadCmd = if (clusterConf.hadoopTgzUrl.get.startsWith("s3://")) {
@@ -161,7 +163,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
       .withRunningMessage(s"[$machineName] Downloading hadoop")
       .withErrorMessage(s"[$machineName] Filed downloading hadoop")
       .run
-    
+
     //setup core-site.xml
     val coreSitePath = clusterConf.hadoopDirName.get + "/etc/hadoop/core-site.xml"
     val coreSite = s"""
@@ -176,13 +178,13 @@ class SparkDeployer(val clusterConf: ClusterConf) {
         </property>
       </configuration>
       """.split("\n").mkString
-    
+
     SSH(address).withRemoteCommand(s"echo -e '${coreSite}' > $coreSitePath")
       .withRetry
       .withRunningMessage(s"[${machineName}] Setting core-site.xml")
       .withErrorMessage(s"[${machineName}] Failed setting core-site.xml")
       .run
-    
+
     //setup hdfs-site.xml
     val hdfsSitePath = clusterConf.hadoopDirName.get + "/etc/hadoop/hdfs-site.xml"
     val hdfsSite = """
@@ -201,35 +203,44 @@ class SparkDeployer(val clusterConf: ClusterConf) {
         </property>
       </configuration>
       """.split("\n").mkString
-      
+
     SSH(address).withRemoteCommand(s"echo -e '${hdfsSite}' > $hdfsSitePath")
       .withRetry
       .withRunningMessage(s"[${machineName}] Setting hdfs-site.xml")
       .withErrorMessage(s"[${machineName}] Failed setting hdfs-site.xml")
       .run
-    
-    //format hdfs and start namenode if on master
-    masterAddressOpt match {
-      case None =>
-        SSH(address)
-          .withRemoteCommand(s"./${clusterConf.hadoopDirName.get}/bin/hdfs namenode -format")
-          .withRunningMessage(s"[$machineName] Formatting hdfs")
-          .withErrorMessage(s"[$machineName] Failed formatting hdfs")
-          .run
-          
-        SSH(address)
-          .withRemoteCommand(s"./${clusterConf.hadoopDirName.get}/sbin/hadoop-daemon.sh --config /home/ec2-user/${clusterConf.hadoopDirName.get}/etc/hadoop --script hdfs start namenode")
-          .withRunningMessage(s"[$machineName] Starting namenode")
-          .withErrorMessage(s"[$machineName] Failed starting namenode")
-          .run
-        
-      case Some(masterAddress) =>
-        SSH(address)
-          .withRemoteCommand(s"./${clusterConf.hadoopDirName.get}/sbin/hadoop-daemon.sh --config /home/ec2-user/${clusterConf.hadoopDirName.get}/etc/hadoop --script hdfs start datanode")
-          .withRunningMessage(s"[$machineName] Starting datanode")
-          .withErrorMessage(s"[$machineName] Failed starting datanode")
-          .run
-    }
+  }
+
+  private def startNamenode(address: String, machineName: String) = {
+    SSH(address)
+      .withRemoteCommand(s"./${clusterConf.hadoopDirName.get}/sbin/hadoop-daemon.sh --config /home/ec2-user/${clusterConf.hadoopDirName.get}/etc/hadoop --script hdfs start namenode")
+      .withRunningMessage(s"[$machineName] Starting namenode")
+      .withErrorMessage(s"[$machineName] Failed starting namenode")
+      .run
+  }
+
+  private def startDatanode(address: String, machineName: String) = {
+    SSH(address)
+      .withRemoteCommand(s"./${clusterConf.hadoopDirName.get}/sbin/hadoop-daemon.sh --config /home/ec2-user/${clusterConf.hadoopDirName.get}/etc/hadoop --script hdfs start datanode")
+      .withRunningMessage(s"[$machineName] Starting datanode")
+      .withErrorMessage(s"[$machineName] Failed starting datanode")
+      .run
+  }
+  
+  private def stopNamenode(address: String, machineName: String) = {
+    SSH(address)
+      .withRemoteCommand(s"./${clusterConf.hadoopDirName.get}/sbin/hadoop-daemon.sh --config /home/ec2-user/${clusterConf.hadoopDirName.get}/etc/hadoop --script hdfs stop namenode")
+      .withRunningMessage(s"[$machineName] Stoping namenode")
+      .withErrorMessage(s"[$machineName] Failed stoping namenode")
+      .run
+  }
+  
+  private def stopDatanode(address: String, machineName: String) = {
+    SSH(address)
+      .withRemoteCommand(s"./${clusterConf.hadoopDirName.get}/sbin/hadoop-daemon.sh --config /home/ec2-user/${clusterConf.hadoopDirName.get}/etc/hadoop --script hdfs stop datanode")
+      .withRunningMessage(s"[$machineName] Stoping datanode")
+      .withErrorMessage(s"[$machineName] Failed stoping datanode")
+      .run
   }
 
   private def runSparkSbin(address: String, scriptName: String, args: Seq[String] = Seq.empty, machineName: String) = {
@@ -297,9 +308,9 @@ class SparkDeployer(val clusterConf: ClusterConf) {
             .run
 
           setupSparkEnv(address, masterAddressOpt, name)
-          
+
           clusterConf.hiveWarehouse.foreach(v => setupHiveSite(address, masterAddressOpt, name, v))
-          
+
           clusterConf.hadoopTgzUrl.foreach(_ => setupHdfs(address, masterAddressOpt, name))
 
           address
@@ -311,6 +322,17 @@ class SparkDeployer(val clusterConf: ClusterConf) {
     assert(getMasterOpt.isEmpty, s"[$masterName] Master already exists.")
     val future = createInstance(masterName, clusterConf.masterInstanceType, clusterConf.masterDiskSize, None).map {
       address =>
+        clusterConf.hadoopTgzUrl.foreach { _ =>
+          //format hdfs
+          SSH(address)
+            .withRemoteCommand(s"./${clusterConf.hadoopDirName.get}/bin/hdfs namenode -format")
+            .withRunningMessage(s"[$masterName] Formatting hdfs")
+            .withErrorMessage(s"[$masterName] Failed formatting hdfs")
+            .run
+
+          startNamenode(address, masterName)
+        }
+
         //start the master
         runSparkSbin(address, "start-master.sh", Seq.empty, masterName)
 
@@ -335,6 +357,8 @@ class SparkDeployer(val clusterConf: ClusterConf) {
       .map { workerName =>
         createInstance(workerName, clusterConf.workerInstanceType, clusterConf.workerDiskSize, Some(masterAddress))
           .map { address =>
+            clusterConf.hadoopTgzUrl.foreach(_ => startDatanode(address, workerName))
+          
             //start the worker
             runSparkSbin(address, "start-slave.sh", Seq(s"spark://$masterAddress:7077"), workerName)
 
@@ -367,6 +391,68 @@ class SparkDeployer(val clusterConf: ClusterConf) {
   def createCluster(num: Int) = {
     createMaster()
     addWorkers(num)
+  }
+  
+  def stopInstances() = {
+    (getWorkers() ++ getMasterOpt()).filter(_.state == "running").foreach{
+      i => ec2.stopInstances(new StopInstancesRequest().withInstanceIds(i.getInstanceId))
+    }
+  }
+  
+  def startInstances() = {
+    (getWorkers() ++ getMasterOpt()).filter(_.state == "stopped").foreach{
+      i => ec2.startInstances(new StartInstancesRequest().withInstanceIds(i.getInstanceId))
+    }
+  }
+  
+  def stopCluster() = {
+    val masterOpt = getMasterOpt()
+    assert(masterOpt.nonEmpty && masterOpt.get.state == "running", "Master does not exist, can't stop cluster.")
+    val masterAddress = masterOpt.get.address
+    
+    //stop workers
+    getWorkers().filter(_.state == "running").foreach {
+      worker => runSparkSbin(worker.address, "stop-slave.sh", Seq.empty, worker.nameOpt.get)
+    }
+    //stop master
+    runSparkSbin(masterAddress, "stop-master.sh", Seq.empty, masterName)
+    
+    clusterConf.hadoopTgzUrl.foreach{_ =>
+      //stop namenode
+      stopNamenode(masterAddress, masterName)
+      //stop datanodes
+      getWorkers().filter(_.state == "running").foreach {
+        worker => stopDatanode(worker.address, worker.nameOpt.get)
+      }
+    }
+  }
+  
+  def startCluster() = {
+    val masterOpt = getMasterOpt()
+    assert(masterOpt.nonEmpty && masterOpt.get.state == "running", "Master does not exist, can't start cluster.")
+    val masterAddress = masterOpt.get.address
+    
+    assert{
+      (getWorkers() ++ masterOpt).forall{ i =>
+        SSH(i.address).withRemoteCommand("ls").run() == 0
+      }
+    }
+    
+    clusterConf.hadoopTgzUrl.foreach{_ => 
+      //start namenode
+      startNamenode(masterAddress, masterName)
+      //start datanodes
+      getWorkers().filter(_.state == "running").foreach {
+        worker => startDatanode(worker.address, worker.nameOpt.get)
+      }
+    }
+    
+    //start master
+    runSparkSbin(masterAddress, "start-master.sh", Seq.empty, masterName)
+    //start workers
+    getWorkers().filter(_.state == "running").foreach {
+      worker => runSparkSbin(worker.address, "start-slave.sh", Seq(s"spark://${masterAddress}:7077"), worker.nameOpt.get)
+    }
   }
 
   def restartCluster() = {
