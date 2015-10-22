@@ -126,6 +126,8 @@ main-class = "mypackage.Main"
 #   SPARK_WORKER_CORES = "3"
 #   SPARK_WORKER_MEMORY = "6G"
 # }
+
+# hive.warehouse = "s3://my-bucket/my-warehouse"
 ```
 * You can provide your own `ami`, the image should be HVM EBS-Backed with Java 7+ installed.
 * Currently tested `instance-type`s are `t2.medium`, `m3.medium`, and `c4.xlarge`. All the M3, M4, C3, and C4 types should work, please report an issue if you encountered a problem.
@@ -143,3 +145,17 @@ main-class = "mypackage.Main"
   * Allow port 8080, 8081, 4040 for web console (optional).
   * Please check [Spark security page](http://spark.apache.org/docs/latest/security.html#configuring-ports-for-network-security) for more information about port settings.
 * `spark-env` adds the additional Spark settings to `conf/spark-env.sh` on each node. Note that `SPARK_MASTER_IP`, `SPARK_MASTER_PORT`, and `SPARK_PUBLIC_DNS` are hard-coded for now.
+
+## SparkSQL
+
+### Prepare the tables
+* Add setting `hive.warehouse` to `spark-deployer.conf`.
+* After the cluster is started, you can use `sqlContext.read.json("s3n://json-path").write.saveAsTable("table_name")` to save the table to both Hive metastore DB and Hive warehouse (S3).
+* The metastore DB is located at `/home/ec2-user/hive/metastore_db` on your master machine.
+
+### Prepare the SQL server
+* Login master.
+* Start thrift server by `./spark-dir/sbin/start-thriftserver.sh --master spark://master-ip:7077 --executor-memory xxG`
+* Start beeline client by `./spark-dir/bin/beeline`
+* In beeline, connect to SQL server by `!connect jdbc:hive2://localhost:10000` and try the SQL queries.
+* Remember to stop the thrift server if you want to submit other Spark job (e.g. to save a new table).
