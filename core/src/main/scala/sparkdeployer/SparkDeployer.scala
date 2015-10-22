@@ -128,18 +128,31 @@ class SparkDeployer(val clusterConf: ClusterConf) {
     s"<configuration>$properties</configuration>"
   }
   
-  private def setupHiveSite(address: String, machineName: String) = {
+  private def setupHive(address: String, machineName: String) = {
     clusterConf.hiveWarehouse.foreach { hiveWarehouse =>
       val hiveSitePath = clusterConf.sparkDirName + "/conf/hive-site.xml"
-      val content = getConfigString(
+      val hiveSiteContent = getConfigString(
         "javax.jdo.option.ConnectionURL" -> "jdbc:derby:;databaseName=/home/ec2-user/hive/metastore_db;create=true",
         "hive.metastore.warehouse.dir" -> hiveWarehouse
       )
       SSH(address)
-        .withRemoteCommand(s"echo -e '$content' > $hiveSitePath")
+        .withRemoteCommand(s"echo -e '$hiveSiteContent' > $hiveSitePath")
         .withRetry
         .withRunningMessage(s"[${machineName}] Setting hive-site.xml")
         .withErrorMessage(s"[${machineName}] Failed setting hive-site.xml")
+        .run
+        
+      val coreSitePath = clusterConf.sparkDirName + "/conf/core-site.xml"
+      val protocal = hiveWarehouse.split(":").head
+      val coreSiteContent = getConfigString(
+        s"fs.$protocal.awsAccessKeyId" -> sys.env("AWS_ACCESS_KEY_ID"),
+        s"fs.$protocal.awsSecretAccessKey" -> sys.env("AWS_SECRET_ACCESS_KEY")
+      )
+      SSH(address)
+        .withRemoteCommand(s"echo -e '$coreSiteContent' > $coreSitePath")
+        .withRetry
+        .withRunningMessage(s"[${machineName}] Setting core-site.xml")
+        .withErrorMessage(s"[${machineName}] Failed setting core-site.xml")
         .run
     }
   }
@@ -210,7 +223,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
 
           setupSparkEnv(address, masterAddressOpt, name)
           
-          setupHiveSite(address, name)
+          setupHive(address, name)
 
           address
       }
