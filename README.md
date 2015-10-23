@@ -157,5 +157,5 @@ main-class = "mypackage.Main"
 * Login master.
 * Start thrift server by `./spark-dir/sbin/start-thriftserver.sh --master spark://master-ip:7077 --executor-memory xxG`
 * Start beeline client by `./spark-dir/bin/beeline`
-* In beeline, connect to SQL server by `!connect jdbc:hive2://localhost:10000` and try the SQL queries.
+* In beeline, connect to SQL server by `!connect jdbc:hive2://localhost:10000` (default username is `ec2-user`, password is empty) and try the SQL queries.
 * Remember to stop the thrift server if you want to submit other Spark job (e.g. to save a new table).
