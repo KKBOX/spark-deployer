@@ -23,7 +23,7 @@ project-root
 ```
 * Write one line in `project/plugins.sbt`:
 ```
-addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "0.9.1")
+addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "0.9.2")
 ```
 * Write your cluster configuration in `spark-deployer.conf` (see the [example](#cluster-configuration-file) below).
 * Write your Spark project's `build.sbt` (Here we give a simple example):
@@ -34,7 +34,7 @@ lazy val root = (project in file("."))
     version := "0.1",
     scalaVersion := "2.10.5",
     libraryDependencies ++= Seq(
-      "org.apache.spark" %% "spark-core" % "1.5.0" % "provided"
+      "org.apache.spark" %% "spark-core" % "1.5.1" % "provided"
     )
   )
 ```
@@ -111,7 +111,7 @@ worker {
 
 # retry-attempts = 20
 
-spark-tgz-url = "http://d3kbcqa49mib13.cloudfront.net/spark-1.5.0-bin-hadoop1.tgz"
+spark-tgz-url = "http://d3kbcqa49mib13.cloudfront.net/spark-1.5.1-bin-hadoop2.4.tgz"
 
 main-class = "mypackage.Main"
 

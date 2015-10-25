@@ -33,8 +33,8 @@ class SparkDeployer(val clusterConf: ClusterConf) {
 
   implicit class InstanceWrapper(i: Instance) {
     def address = {
-      val address = if (clusterConf.usePrivateIp) i.getPrivateIpAddress() else i.getPublicIpAddress()
-      if (address == null) sys.error("Instance's address not found") else address
+      val address = if (clusterConf.usePrivateIp) i.getPrivateIpAddress() else i.getPublicDnsName()
+      if (address == null || address == "") sys.error("Instance's address not found") else address
     }
     def state = i.getState().getName()
     def nameOpt = i.getTags().asScala.find(_.getKey == "Name").map(_.getValue)
