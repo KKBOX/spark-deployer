@@ -3,10 +3,9 @@
 [![Join the chat at https://gitter.im/pishen/spark-deployer](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/pishen/spark-deployer?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 * A Scala tool which helps deploying [Apache Spark](http://spark.apache.org/) stand-alone cluster and submitting job.
 * Currently supports [Amazon EC2](http://aws.amazon.com/ec2/) with Spark 1.4.1+.
-* This project contains three parts, a core library, a SBT plugin, and a simple command line tool.
-* Since we're in the experiment state, the spec may change rapidly in the future.
+* There are two modes when using spark-deployer, SBT plugin and embedded mode.
 
-## How to use the SBT plugin
+## SBT plugin mode
 * Set the environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` for AWS.
 * Prepare a project with structure like below:
 ```
@@ -32,9 +31,9 @@ lazy val root = (project in file("."))
   .settings(
     name := "my-project-name",
     version := "0.1",
-    scalaVersion := "2.10.5",
+    scalaVersion := "2.10.6",
     libraryDependencies ++= Seq(
-      "org.apache.spark" %% "spark-core" % "1.5.1" % "provided"
+      "org.apache.spark" %% "spark-core" % "1.5.2" % "provided"
     )
   )
 ```
@@ -50,40 +49,51 @@ object Main {
   def main(args: Array[String]) {
     //setup spark
     val sc = new SparkContext(new SparkConf())
-    //your algorithm 
-    sc.textFile("s3n://my-bucket/input.gz").collect().foreach(println)
+    //your algorithm
+    sc.textFile("s3n://my-bucket/*.gz")
+      .map(_.split(" ").size).reduce(_ + _)
   }
 }
 ```
 * Create the cluster by `sbt "sparkCreateCluster <number-of-workers>"`. You can also execute `sbt` first and type `sparkCreateCluster <number-of-workers>` in the sbt console. You may first type `spark` and hit TAB to see all the available commands.
-* Once the cluster is created, submit your job by `sparkSubmitJob <job-args>`
+* Once the cluster is created, submit your job by `sparkSubmitJob <arg0> <arg1> ...`
+* When your job is done, destroy your cluster by `sparkDestroyCluster`
 
-### Other available commands
+### All available commands
 * `sparkCreateMaster` creates only the master node.
 * `sparkAddWorkers <number-of-workers>` supports dynamically add more workers to an existing cluster.
+* `sparkCreateCluster <number-of-workers>` shortcut command for the above two commands.
 * `sparkRemoveWorkers <number-of-workers>` supports dynamically remove workers to scale down the cluster.
 * `sparkDestroyCluster` terminates all the nodes in the cluster.
 * `sparkRestartCluster` restart the cluster with new settings from `spark-env` without recreating the machines.
 * `sparkShowMachines` shows the machine addresses with commands to login master and execute spark-shell on it.
 * `sparkUploadJar` uploads the job's jar file to master node.
+* `sparkSubmitJob` uploads and runs the job.
 * `sparkRemoveS3Dir <dir-name>` remove the s3 directory with the `_$folder$` folder file. (ex. `sparkRemoveS3Dir s3://bucket_name/middle_folder/target_folder`)
 
-## How to use the command line tool
-For the environment that couldn't install sbt, here is a command line tool (jar file) which only requires java installed.
-* Set the environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` for AWS.
-* Clone this project, build the jar file by `sbt cmd/assembly`. Get the output file at `cmd/target/scala-2.10/spark-deployer-cmd-assembly-x.x.x.jar`.
-* Provide the [cluster configuration file](#cluster-configuration-file) `spark-deployer.conf` at the same directory with `spark-deployer-cmd-assembly-x.x.x.jar`.
-* Provide a Spark job's jar file `spark-job.jar` (The jar file built by sbt-assembly from a Spark project).
-* Use the following commands to create cluster, submit job, and destroy the cluster:
+## Embedded mode
+If you don't want to use sbt, or if you would like to trigger the cluster creation from within your Scala application, you can include the library of spark-deployer directly:
 ```
-java -jar spark-deployer-cmd-assembly-x.x.x.jar --create-cluster <number-of-workers>
-java -jar spark-deployer-cmd-assembly-x.x.x.jar --submit-job spark-job.jar <job-args>
-java -jar spark-deployer-cmd-assembly-x.x.x.jar --destroy-cluster
+libraryDependencies += "net.pishen" % "spark-deployer-core_2.10" % "0.9.2"
 ```
-* To add more workers, use:
+Then, from your Scala code, you can do something like this:
+```scala
+import sparkdeployer._
+
+val sparkDeployer = new SparkDeployer(ClusterConf.fromFile("path/to/spark-deployer.conf"))
+
+val numOfWorkers = 2
+val jobJar = new File("path/to/job.jar")
+val args = Seq("arg0", "arg1")
+
+sparkDeployer.createCluster(numOfWorkers)
+sparkDeployer.submitJob(jobJar, args)
+sparkDeployer.destroyCluster()
 ```
-java -jar spark-deployer-cmd-assembly-x.x.x.jar --add-workers <number-of-workers>
-```
+
+* Environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` should be set in this mode, too.
+* You may prepare the `job.jar` by sbt-assembly from other sbt project with Spark.
+* For other available functions, check `SparkDeployer.scala` in our source code.
 
 ## Cluster configuration file
 Here we give an example of `spark-deployer.conf` (settings commented out with `#` are optional):
@@ -111,7 +121,7 @@ worker {
 
 # retry-attempts = 20
 
-spark-tgz-url = "http://d3kbcqa49mib13.cloudfront.net/spark-1.5.1-bin-hadoop2.4.tgz"
+spark-tgz-url = "http://d3kbcqa49mib13.cloudfront.net/spark-1.5.2-bin-hadoop2.4.tgz"
 
 main-class = "mypackage.Main"
 
