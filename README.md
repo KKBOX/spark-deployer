@@ -56,13 +56,13 @@ object Main {
 }
 ```
 * Create the cluster by `sbt "sparkCreateCluster <number-of-workers>"`. You can also execute `sbt` first and type `sparkCreateCluster <number-of-workers>` in the sbt console. You may first type `spark` and hit TAB to see all the available commands.
-* Once the cluster is created, submit your job by `sparkSubmitJob <job-args>`
+* Once the cluster is created, submit your job by `sparkSubmitJob <arg0> <arg1> ...`
 * When your job is done, destroy your cluster by `sparkDestroyCluster`
 
 ### All available commands
 * `sparkCreateMaster` creates only the master node.
 * `sparkAddWorkers <number-of-workers>` supports dynamically add more workers to an existing cluster.
-* `sparkCreateCluster <number-of-workers>` shortcut command for the above two ones.
+* `sparkCreateCluster <number-of-workers>` shortcut command for the above two commands.
 * `sparkRemoveWorkers <number-of-workers>` supports dynamically remove workers to scale down the cluster.
 * `sparkDestroyCluster` terminates all the nodes in the cluster.
 * `sparkRestartCluster` restart the cluster with new settings from `spark-env` without recreating the machines.
@@ -77,10 +77,10 @@ If you don't want to use sbt, or if you would like to trigger the cluster creati
 libraryDependencies += "net.pishen" % "spark-deployer-core_2.10" % "0.9.2"
 ```
 Then, from your Scala code, you can do something like this:
-```
+```scala
 import sparkdeployer._
 
-val sparkDeployer = new SparkDeployer(ClusterConf.fromFile("path/to/your/spark-deployer.conf"))
+val sparkDeployer = new SparkDeployer(ClusterConf.fromFile("path/to/spark-deployer.conf"))
 
 val numOfWorkers = 2
 val jobJar = new File("path/to/job.jar")
@@ -91,7 +91,7 @@ sparkDeployer.submitJob(jobJar, args)
 sparkDeployer.destroyCluster()
 ```
 
-* Environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` should be set here, too.
+* Environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` should be set in this mode, too.
 * You may prepare the `job.jar` by sbt-assembly from other sbt project with Spark.
 * For other available functions, check `SparkDeployer.scala` in our source code.
 
