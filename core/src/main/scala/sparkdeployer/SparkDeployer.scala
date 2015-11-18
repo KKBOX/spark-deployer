@@ -284,19 +284,18 @@ class SparkDeployer(val clusterConf: ClusterConf) {
   private def removeWorkers(workers: Seq[Instance]): Unit = {
     workers.foreach { worker =>
       println(s"[${worker.nameOpt.get}] Terminating...")
-      runSparkSbin(worker.address, "stop-slave.sh", Seq.empty, worker.nameOpt.get)
       ec2.terminateInstances(new TerminateInstancesRequest().withInstanceIds(worker.getInstanceId))
     }
   }
 
   def removeWorkers(num: Int): Unit = removeWorkers {
-    getWorkers().filter(_.state == "running")
+    getWorkers()
       .sortBy(_.nameOpt.get.split("-").last.toInt).reverse
       .take(num)
   }
 
   def destroyCluster() = {
-    removeWorkers(getWorkers().filter(_.state == "running"))
+    removeWorkers(getWorkers())
 
     getMasterOpt().foreach { master =>
       println(s"[${master.nameOpt.get}] Terminating...")
