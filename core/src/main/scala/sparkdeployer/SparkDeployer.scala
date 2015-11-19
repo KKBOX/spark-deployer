@@ -191,8 +191,19 @@ class SparkDeployer(val clusterConf: ClusterConf) {
       }
   }
 
+  private def withFailover[T](op: => T): T = {
+    Try { op } match {
+      case Success(x) => x
+      case Failure(e) =>
+        if (clusterConf.destroyOnFail) {
+          destroyCluster()
+        }
+        throw e
+    }
+  }
+
   //main functions
-  def createMaster() = {
+  def createMaster() = withFailover {
     assert(getMasterOpt.isEmpty, s"[$masterName] Master already exists.")
     val future = createInstance(masterName, clusterConf.masterInstanceType, clusterConf.masterDiskSize, None).map {
       address =>
@@ -204,7 +215,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
     Await.result(future, Duration.Inf)
   }
 
-  def addWorkers(num: Int) = {
+  def addWorkers(num: Int) = withFailover {
     val masterOpt = getMasterOpt()
     assert(masterOpt.map(_.state == "running").getOrElse(false), "Master does not exist, can't create workers.")
     val masterAddress = masterOpt.get.address
@@ -284,19 +295,18 @@ class SparkDeployer(val clusterConf: ClusterConf) {
   private def removeWorkers(workers: Seq[Instance]): Unit = {
     workers.foreach { worker =>
       println(s"[${worker.nameOpt.get}] Terminating...")
-      runSparkSbin(worker.address, "stop-slave.sh", Seq.empty, worker.nameOpt.get)
       ec2.terminateInstances(new TerminateInstancesRequest().withInstanceIds(worker.getInstanceId))
     }
   }
 
   def removeWorkers(num: Int): Unit = removeWorkers {
-    getWorkers().filter(_.state == "running")
+    getWorkers()
       .sortBy(_.nameOpt.get.split("-").last.toInt).reverse
       .take(num)
   }
 
   def destroyCluster() = {
-    removeWorkers(getWorkers().filter(_.state == "running"))
+    removeWorkers(getWorkers())
 
     getMasterOpt().foreach { master =>
       println(s"[${master.nameOpt.get}] Terminating...")
@@ -371,7 +381,7 @@ class SparkDeployer(val clusterConf: ClusterConf) {
     }
   }
 
-  def submitJob(jar: File, args: Seq[String]) = {
+  def submitJob(jar: File, args: Seq[String]) = withFailover {
     uploadJar(jar)
 
     println("[warning] You're submitting job directly, please make sure you have a stable network connection.")

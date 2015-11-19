@@ -72,6 +72,8 @@ class ClusterConf(configFile: File) {
   val usePrivateIp = config.as[Option[Boolean]]("use-private-ip").getOrElse(false)
   val securityGroupIds = config.as[Option[Set[String]]]("security-group-ids")
   val sparkEnv = config.as[Option[Map[String, String]]]("spark-env").getOrElse(Map.empty)
+  
+  val destroyOnFail = config.as[Option[Boolean]]("destroy-on-fail").getOrElse(false)
 }
 
 object ClusterConf {

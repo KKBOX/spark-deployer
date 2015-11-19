@@ -22,7 +22,7 @@ project-root
 ```
 * Write one line in `project/plugins.sbt`:
 ```
-addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "0.9.2")
+addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "0.10.0")
 ```
 * Write your cluster configuration in `spark-deployer.conf` (see the [example](#cluster-configuration-file) below).
 * Write your Spark project's `build.sbt` (Here we give a simple example):
@@ -74,7 +74,7 @@ object Main {
 ## Embedded mode
 If you don't want to use sbt, or if you would like to trigger the cluster creation from within your Scala application, you can include the library of spark-deployer directly:
 ```
-libraryDependencies += "net.pishen" % "spark-deployer-core_2.10" % "0.9.2"
+libraryDependencies += "net.pishen" % "spark-deployer-core_2.10" % "0.10.0"
 ```
 Then, from your Scala code, you can do something like this:
 ```scala
@@ -136,6 +136,8 @@ main-class = "mypackage.Main"
 #   SPARK_WORKER_CORES = "3"
 #   SPARK_WORKER_MEMORY = "6G"
 # }
+
+# destroy-on-fail = true
 ```
 * You can provide your own `ami`, the image should be HVM EBS-Backed with Java 7+ installed.
 * Currently tested `instance-type`s are `t2.medium`, `m3.medium`, and `c4.xlarge`. All the M3, M4, C3, and C4 types should work, please report an issue if you encountered a problem.
@@ -153,3 +155,4 @@ main-class = "mypackage.Main"
   * Allow port 8080, 8081, 4040 for web console (optional).
   * Please check [Spark security page](http://spark.apache.org/docs/latest/security.html#configuring-ports-for-network-security) for more information about port settings.
 * `spark-env` adds the additional Spark settings to `conf/spark-env.sh` on each node. Note that `SPARK_MASTER_IP`, `SPARK_MASTER_PORT`, and `SPARK_PUBLIC_DNS` are hard-coded for now.
+* `destroy-on-fail`: if set to `true`, destroy the cluster when spark-deployer met an error in `sparkCreateCluster` or `sparkSubmitJob`. Note that you still need to destroy the cluster by yourself if no error happens.
