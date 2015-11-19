@@ -155,4 +155,4 @@ main-class = "mypackage.Main"
   * Allow port 8080, 8081, 4040 for web console (optional).
   * Please check [Spark security page](http://spark.apache.org/docs/latest/security.html#configuring-ports-for-network-security) for more information about port settings.
 * `spark-env` adds the additional Spark settings to `conf/spark-env.sh` on each node. Note that `SPARK_MASTER_IP`, `SPARK_MASTER_PORT`, and `SPARK_PUBLIC_DNS` are hard-coded for now.
-* `destroy-on-fail`: if set to `true`, destroy the cluster when sbt met an error in `sparkCreateCluster` or `sparkSubmitJob`. You still need to destroy the cluster by yourself if no error happens.
+* `destroy-on-fail`: if set to `true`, destroy the cluster when spark-deployer met an error in `sparkCreateCluster` or `sparkSubmitJob`. Note that you still need to destroy the cluster by yourself if no error happens.
