@@ -1,7 +1,7 @@
 lazy val commonSettings = Seq(
   organization := "net.pishen",
-  version := "0.9.2",
-  scalaVersion := "2.10.5",
+  version := "0.10.0",
+  scalaVersion := "2.10.6",
   licenses += ("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0.html")),
   homepage := Some(url("https://github.com/pishen/spark-deployer")),
   pomExtra := (
@@ -25,9 +25,9 @@ lazy val core = (project in file("core"))
     name := "spark-deployer-core",
     libraryDependencies ++= Seq(
       "net.ceedubs"        %% "ficus"            % "1.0.1",
-      "com.github.seratch" %% "awscala"          % "0.5.3" excludeAll(ExclusionRule(organization = "com.amazonaws")),
-      "com.amazonaws"      %  "aws-java-sdk-s3"  % "1.10.20",
-      "com.amazonaws"      %  "aws-java-sdk-ec2" % "1.10.20"
+      "com.github.seratch" %% "awscala"          % "0.5.5" excludeAll(ExclusionRule(organization = "com.amazonaws")),
+      "com.amazonaws"      %  "aws-java-sdk-s3"  % "1.10.34",
+      "com.amazonaws"      %  "aws-java-sdk-ec2" % "1.10.34"
     )
   )
 
@@ -36,7 +36,7 @@ lazy val sbt = (project in file("sbt"))
   .settings(
     sbtPlugin := true,
     name := "spark-deployer-sbt",
-    addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.13.0"),
+    addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.14.0"),
     publishMavenStyle := false
   )
   .dependsOn(core)
