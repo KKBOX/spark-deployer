@@ -48,13 +48,13 @@ object Main {
     //setup spark
     val sc = new SparkContext(new SparkConf())
     //your algorithm
-    val n = 500000
+    val n = 10000000
     val count = sc.parallelize(1 to n).map { i =>
       val x = scala.math.random
       val y = scala.math.random
       if (x * x + y * y < 1) 1 else 0
     }.reduce(_ + _)
-    println("Pi is roughly " + (count.toDouble / n))
+    println("Pi is roughly " + 4.0 * count / n)
   }
 }
 ```
