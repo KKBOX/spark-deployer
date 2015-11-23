@@ -1,6 +1,6 @@
 lazy val commonSettings = Seq(
   organization := "net.pishen",
-  version := "0.10.1",
+  version := "0.11.0",
   scalaVersion := "2.10.6",
   licenses += ("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0.html")),
   homepage := Some(url("https://github.com/pishen/spark-deployer")),
@@ -24,10 +24,11 @@ lazy val core = (project in file("core"))
   .settings(
     name := "spark-deployer-core",
     libraryDependencies ++= Seq(
-      "net.ceedubs"        %% "ficus"            % "1.0.1",
-      "com.github.seratch" %% "awscala"          % "0.5.5" excludeAll(ExclusionRule(organization = "com.amazonaws")),
-      "com.amazonaws"      %  "aws-java-sdk-s3"  % "1.10.34",
-      "com.amazonaws"      %  "aws-java-sdk-ec2" % "1.10.34"
+      "org.slf4s" %% "slf4s-api" % "1.7.12",
+      "net.ceedubs" %% "ficus" % "1.0.1",
+      "com.github.seratch" %% "awscala" % "0.5.5" excludeAll(ExclusionRule(organization = "com.amazonaws")),
+      "com.amazonaws" % "aws-java-sdk-s3" % "1.10.34",
+      "com.amazonaws" % "aws-java-sdk-ec2" % "1.10.34"
     )
   )
 
@@ -37,7 +38,8 @@ lazy val sbt = (project in file("sbt"))
     sbtPlugin := true,
     name := "spark-deployer-sbt",
     addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.14.0"),
-    publishMavenStyle := false
+    publishMavenStyle := false,
+    libraryDependencies += "com.github.eirslett" %% "sbt-slf4j" % "0.1"
   )
   .dependsOn(core)
 

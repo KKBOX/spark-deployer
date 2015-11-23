@@ -1,6 +1,6 @@
 # spark-deployer
 
-[![Join the chat at https://gitter.im/pishen/spark-deployer](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/pishen/spark-deployer?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![Join the chat at https://gitter.im/KKBOX/spark-deployer](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/KKBOX/spark-deployer?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 * A Scala tool which helps deploying [Apache Spark](http://spark.apache.org/) stand-alone cluster and submitting job.
 * Currently supports [Amazon EC2](http://aws.amazon.com/ec2/) with Spark 1.4.1+.
 * There are two modes when using spark-deployer, SBT plugin and embedded mode.
@@ -22,7 +22,7 @@ project-root
 ```
 * Write one line in `project/plugins.sbt`:
 ```
-addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "0.10.1")
+addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "0.11.0")
 ```
 * Write your cluster configuration in `spark-deployer.conf` (see the [example](#cluster-configuration-file) below).
 * Write your Spark project's `build.sbt` (Here we give a simple example):
@@ -41,17 +41,20 @@ lazy val root = (project in file("."))
 ```scala
 package mypackage
 
-import org.apache.spark.SparkConf
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
+import org.apache.spark._
 
 object Main {
   def main(args: Array[String]) {
     //setup spark
     val sc = new SparkContext(new SparkConf())
     //your algorithm
-    sc.textFile("s3n://my-bucket/*.gz")
-      .map(_.split(" ").size).reduce(_ + _)
+    val n = 10000000
+    val count = sc.parallelize(1 to n).map { i =>
+      val x = scala.math.random
+      val y = scala.math.random
+      if (x * x + y * y < 1) 1 else 0
+    }.reduce(_ + _)
+    println("Pi is roughly " + 4.0 * count / n)
   }
 }
 ```
@@ -74,7 +77,7 @@ object Main {
 ## Embedded mode
 If you don't want to use sbt, or if you would like to trigger the cluster creation from within your Scala application, you can include the library of spark-deployer directly:
 ```
-libraryDependencies += "net.pishen" % "spark-deployer-core_2.10" % "0.10.1"
+libraryDependencies += "net.pishen" % "spark-deployer-core_2.10" % "0.11.0"
 ```
 Then, from your Scala code, you can do something like this:
 ```scala

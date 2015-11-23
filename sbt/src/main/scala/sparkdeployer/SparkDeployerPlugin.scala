@@ -19,12 +19,14 @@ import com.typesafe.config.Config
 
 import awscala.s3.Bucket
 import awscala.s3.S3
+import org.slf4j.impl.StaticLoggerBinder
 import sbt.AutoPlugin
 import sbt.Def.macroValueIT
 import sbt.Def.spaceDelimited
 import sbt.inputKey
 import sbt.parserToInput
 import sbt.taskKey
+import sbt.Keys.streams
 import sbtassembly.AssemblyKeys.assembly
 
 object SparkDeployerPlugin extends AutoPlugin {
@@ -54,12 +56,16 @@ object SparkDeployerPlugin extends AutoPlugin {
   override def trigger = allRequirements
 
   lazy val sparkDeployer = new SparkDeployer(ClusterConf.fromFile("spark-deployer.conf"))
-
+  
   override lazy val projectSettings = Seq(
     sparkClusterConf := sparkDeployer.clusterConf.config,
 
-    sparkCreateMaster := sparkDeployer.createMaster(),
+    sparkCreateMaster := {
+      StaticLoggerBinder.sbtLogger = streams.value.log
+      sparkDeployer.createMaster()
+    },
     sparkAddWorkers := {
+      StaticLoggerBinder.sbtLogger = streams.value.log
       val args = spaceDelimited().parsed
       require(args.length == 1, "Usage: sparkAddWorkers <num-of-workers>")
 
@@ -69,6 +75,7 @@ object SparkDeployerPlugin extends AutoPlugin {
       sparkDeployer.addWorkers(numOfWorkers)
     },
     sparkCreateCluster := {
+      StaticLoggerBinder.sbtLogger = streams.value.log
       val args = spaceDelimited().parsed
       require(args.length == 1, "Usage: sparkCreateCluster <num-of-workers>")
 
@@ -79,6 +86,7 @@ object SparkDeployerPlugin extends AutoPlugin {
     },
 
     sparkRemoveWorkers := {
+      StaticLoggerBinder.sbtLogger = streams.value.log
       val args = spaceDelimited().parsed
       require(args.length == 1, "Usage: sparkRemoveWorkers <num-of-workers>")
 
@@ -87,14 +95,27 @@ object SparkDeployerPlugin extends AutoPlugin {
 
       sparkDeployer.removeWorkers(numOfWorkers)
     },
-    sparkDestroyCluster := sparkDeployer.destroyCluster(),
+    sparkDestroyCluster := {
+      StaticLoggerBinder.sbtLogger = streams.value.log
+      sparkDeployer.destroyCluster()
+    },
 
-    sparkShowMachines := sparkDeployer.showMachines(),
+    sparkShowMachines := {
+      StaticLoggerBinder.sbtLogger = streams.value.log
+      sparkDeployer.showMachines()
+    },
 
-    sparkUploadJar := sparkDeployer.uploadJar(assembly.value),
-    sparkSubmitJob := sparkDeployer.submitJob(assembly.value, spaceDelimited().parsed),
+    sparkUploadJar := {
+      StaticLoggerBinder.sbtLogger = streams.value.log
+      sparkDeployer.uploadJar(assembly.value)
+    },
+    sparkSubmitJob := {
+      StaticLoggerBinder.sbtLogger = streams.value.log
+      sparkDeployer.submitJob(assembly.value, spaceDelimited().parsed)
+    },
 
     sparkRemoveS3Dir := {
+      val log = streams.value.log
       val args = spaceDelimited().parsed
       require(args.length == 1, "Please give the directory name.")
       val path = args.head
@@ -109,14 +130,17 @@ object SparkDeployerPlugin extends AutoPlugin {
       s3.keys(bucket, dirPrefix).grouped(1000).foreach {
         keys =>
           val res = s3.deleteObjects(new DeleteObjectsRequest(bucket.getName).withKeys(keys: _*))
-          println(res.getDeletedObjects.size() + " objects deleted.")
+          log.info(res.getDeletedObjects.size() + " objects deleted.")
       }
       s3.get(bucket, dirPrefix.init + "_$folder$").foreach {
         obj =>
           s3.deleteObject(obj)
-          println(obj.getKey + " deleted.")
+          log.info(obj.getKey + " deleted.")
       }
     },
-    sparkRestartCluster := sparkDeployer.restartCluster()
+    sparkRestartCluster := {
+      StaticLoggerBinder.sbtLogger = streams.value.log
+      sparkDeployer.restartCluster()
+    }
   )
 }
