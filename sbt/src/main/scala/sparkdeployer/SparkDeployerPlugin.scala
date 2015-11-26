@@ -19,6 +19,7 @@ import com.typesafe.config.Config
 
 import awscala.s3.Bucket
 import awscala.s3.S3
+import awscala.Region0
 import org.slf4j.impl.StaticLoggerBinder
 import sbt.AutoPlugin
 import sbt.Def.macroValueIT
@@ -126,7 +127,7 @@ object SparkDeployerPlugin extends AutoPlugin {
         if (raw.endsWith("/")) raw else raw + "/"
       }
 
-      val s3 = S3()
+      val s3 = S3().at(Region0(S3().location(bucket)))
       s3.keys(bucket, dirPrefix).grouped(1000).foreach {
         keys =>
           val res = s3.deleteObjects(new DeleteObjectsRequest(bucket.getName).withKeys(keys: _*))
