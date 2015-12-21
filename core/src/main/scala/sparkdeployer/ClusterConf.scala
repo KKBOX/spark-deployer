@@ -74,6 +74,8 @@ class ClusterConf(configFile: File) {
   val sparkEnv = config.as[Option[Map[String, String]]]("spark-env").getOrElse(Map.empty)
   
   val destroyOnFail = config.as[Option[Boolean]]("destroy-on-fail").getOrElse(false)
+  
+  val threadPoolSize = config.as[Option[Int]]("thread-pool-size").getOrElse(10)
 }
 
 object ClusterConf {

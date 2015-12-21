@@ -28,7 +28,7 @@ import scala.sys.process.stringSeqToProcess
 import scala.util.{Failure, Success, Try}
 
 class SparkDeployer(val clusterConf: ClusterConf) extends Logging {
-  implicit val ec = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(100))
+  implicit val ec = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(clusterConf.threadPoolSize))
 
   private val ec2 = new AmazonEC2Client().withRegion[AmazonEC2Client](Regions.fromName(clusterConf.region))
 
