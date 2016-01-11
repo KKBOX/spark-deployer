@@ -1,6 +1,8 @@
+scalaVersion := "2.10.6"
+
 lazy val commonSettings = Seq(
   organization := "net.pishen",
-  version := "0.12.0",
+  version := "0.13.0",
   scalaVersion := "2.10.6",
   licenses += ("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0.html")),
   homepage := Some(url("https://github.com/pishen/spark-deployer")),
@@ -32,7 +34,7 @@ lazy val core = (project in file("core"))
     )
   )
 
-lazy val sbt = (project in file("sbt"))
+lazy val plugin = (project in file("plugin"))
   .settings(commonSettings: _*)
   .settings(
     sbtPlugin := true,

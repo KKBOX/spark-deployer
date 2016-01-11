@@ -119,8 +119,7 @@ class SparkDeployer(val clusterConf: ClusterConf) extends Logging {
   private def setupSparkEnv(address: String, masterAddressOpt: Option[String], machineName: String) = {
     val sparkEnvPath = clusterConf.sparkDirName + "/conf/spark-env.sh"
     val masterAddress = masterAddressOpt.getOrElse(address)
-    val sparkEnvConf = (clusterConf.sparkEnv ++ Map("SPARK_MASTER_IP" -> masterAddress, "SPARK_PUBLIC_DNS" -> address))
-      .map { case (k, v) => s"${k}=${v}" }.mkString("\\n")
+    val sparkEnvConf = (clusterConf.sparkEnv ++ Seq(s"SPARK_MASTER_IP=$masterAddress", s"SPARK_PUBLIC_DNS=$address")).mkString("\\n")
     SSH(address)
       .withRemoteCommand(s"echo -e '$sparkEnvConf' > $sparkEnvPath && chmod u+x $sparkEnvPath")
       .withRetry
