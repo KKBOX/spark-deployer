@@ -31,6 +31,7 @@ class ClusterConf(configFile: File) {
     require(pemFile.exists(), "I can't find your pem file at " + pemFile.getAbsolutePath)
     pemFile.getAbsolutePath
   }
+  val user = config.as[Option[String]]("user").getOrElse("ec2-user")
 
   val region = config.as[String]("region")
   

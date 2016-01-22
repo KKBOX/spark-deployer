@@ -47,9 +47,6 @@ object SparkDeployerPlugin extends AutoPlugin {
     lazy val sparkUploadJar = taskKey[Unit]("Upload job jar to master.")
     lazy val sparkSubmitJob = inputKey[Unit]("Upload and run the job directly.")
 
-    //lazy val sparkLoginMaster = taskKey[Unit]("Login master with ssh.")
-    //lazy val sparkShowSpaceUsage = taskKey[Unit]("Show space usage for all the instances.")
-
     lazy val sparkRemoveS3Dir = inputKey[Unit]("Remove the s3 directory include _$folder$ postfix file.")
     lazy val sparkRestartCluster = taskKey[Unit]("Restart spark master/worker with new environment variables.")
   }
