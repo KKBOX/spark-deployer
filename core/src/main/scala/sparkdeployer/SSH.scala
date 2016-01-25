@@ -56,10 +56,10 @@ case class SSH(
 
   def run(): Int = {
     val op = (attempts: Int) => {
-      log.info(runningMessage.getOrElse("ssh") + s" | attempts = $attempts | " + fullCommandSeq(true).mkString(" "))
+      log.info("[SSH] " + runningMessage.getOrElse("ssh") + s" Attempts: $attempts. Command: " + fullCommandSeq(true).mkString(" "))
       val exitValue = fullCommandSeq(false).!
       if (exitValue != 0) {
-        sys.error(s"${errorMessage.getOrElse("ssh error")} | exitValue = $exitValue")
+        sys.error(s"[SSH] ${errorMessage.getOrElse("ssh error")}. exitValue = ${exitValue}.")
       } else exitValue
     }
     if (retryEnabled) retry(op) else op(1)

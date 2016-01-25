@@ -23,7 +23,6 @@ object Helpers extends Logging {
     Try { op(attempts) } match {
       case Success(x) => x
       case Failure(e) if attempts > 1 =>
-        log.warn("Exception catched, will retry.", e)
         Thread.sleep(15000)
         retry(op, attempts - 1)
       case Failure(e) => throw e

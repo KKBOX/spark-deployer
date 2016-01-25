@@ -49,8 +49,8 @@ class SparkDeployer(val clusterConf: ClusterConf) extends Logging {
       SSH(machine.address).withRemoteCommand("wget -nv " + clusterConf.sparkTgzUrl + " && " + extractCmd)
     }
       .withRetry
-      .withRunningMessage(s"[${machine.name}] Downloading Spark")
-      .withErrorMessage(s"[${machine.name}] Failed downloading Spark")
+      .withRunningMessage(s"[${machine.name}] Downloading Spark.")
+      .withErrorMessage(s"[${machine.name}] Failed downloading Spark.")
       .run
   }
 
@@ -61,8 +61,8 @@ class SparkDeployer(val clusterConf: ClusterConf) extends Logging {
     SSH(machine.address)
       .withRemoteCommand(s"echo -e '$sparkEnvConf' > $sparkEnvPath && chmod u+x $sparkEnvPath")
       .withRetry
-      .withRunningMessage(s"[${machine.name}] Setting spark-env")
-      .withErrorMessage(s"[${machine.name}] Failed setting spark-env")
+      .withRunningMessage(s"[${machine.name}] Setting spark-env.")
+      .withErrorMessage(s"[${machine.name}] Failed setting spark-env.")
       .run
   }
 
@@ -70,8 +70,8 @@ class SparkDeployer(val clusterConf: ClusterConf) extends Logging {
     SSH(machine.address)
       .withRemoteCommand(s"./${clusterConf.sparkDirName}/sbin/${scriptName} ${args.mkString(" ")}")
       .withRetry
-      .withRunningMessage(s"[${machine.name}] ${scriptName}")
-      .withErrorMessage(s"[${machine.name}] Failed on ${scriptName}")
+      .withRunningMessage(s"[${machine.name}] ${scriptName}.")
+      .withErrorMessage(s"[${machine.name}] Failed on ${scriptName}.")
       .run
   }
 
@@ -89,7 +89,7 @@ class SparkDeployer(val clusterConf: ClusterConf) extends Logging {
   //main functions
   def createMaster() = withFailover {
     assert(getMasterOpt.isEmpty, s"[$masterName] Master already exists.")
-    val master = machines.createMachine(Master, masterName).head
+    val master = machines.createMachine(Master, masterName)
     downloadSpark(master)
     setupSparkEnv(master, None)
     runSparkSbin(master, "start-master.sh")
@@ -117,7 +117,7 @@ class SparkDeployer(val clusterConf: ClusterConf) extends Logging {
         log.info(s"[${worker.name}] Worker started.")
       }.recover {
         case e: Exception =>
-          log.error("Failed on setting up worker ${worker.name}", e)
+          log.error(s"[${worker.name}] Failed on setting up worker.", e)
           throw e
       }
     }
@@ -162,17 +162,12 @@ class SparkDeployer(val clusterConf: ClusterConf) extends Logging {
       .sortBy(_.name.split("-").last.toInt).reverse
       .take(num)
 
-    log.info("Destroying workers:\n" + workers.map(_.name).mkString("\n"))
+    log.info("Destroying workers.")
     machines.destroyMachines(workers.map(_.id).toSet)
   }
 
   def destroyCluster() = {
-    removeWorkers(getWorkers.size)
-
-    getMasterOpt.foreach { master =>
-      log.info(s"Destroying ${master.name}")
-      machines.destroyMachine(master.id)
-    }
+    machines.destroyMachines((getWorkers ++ getMasterOpt).map(_.id).toSet)
   }
 
   def showMachines() = {
@@ -181,7 +176,7 @@ class SparkDeployer(val clusterConf: ClusterConf) extends Logging {
         log.info("No master found.")
       case Some(master) =>
         log.info(Seq(
-          "[master] " + master.name,
+          s"[master] ${master.name}. IP address: ${master.address}",
           "Login command: " + SSH(master.address).getCommand,
           s"Web UI: http://${master.address}:8080"
         ).mkString("\n"))
@@ -190,7 +185,7 @@ class SparkDeployer(val clusterConf: ClusterConf) extends Logging {
     getWorkers
       .sortBy(_.name.split("-").last.toInt)
       .foreach { worker =>
-        log.info(s"[worker] ${worker.name} ${worker.address}")
+        log.info(s"[worker] ${worker.name}. IP address: ${worker.address}")
       }
   }
 

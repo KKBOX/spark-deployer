@@ -21,12 +21,12 @@ trait Machines {
   def destroyMachines(ids: Set[String]): Unit
   def getMachines(): Seq[Machine]
   
-  def createMachine(machineType: MachineType, name: String) = createMachines(machineType, Set(name))
+  def createMachine(machineType: MachineType, name: String) = createMachines(machineType, Set(name)).head
   def destroyMachine(id: String) = destroyMachines(Set(id))
 }
 
 case class Machine(id: String, name: String, address: String)
 
-trait MachineType
+sealed trait MachineType
 case object Master extends MachineType
 case object Worker extends MachineType

@@ -20,6 +20,7 @@ import com.amazonaws.services.ec2.model.{BlockDeviceMapping, CreateTagsRequest, 
 import org.slf4s.Logging
 import scala.collection.JavaConverters._
 import scala.util.Try
+import Helpers.retry
 
 class EC2Machines(implicit clusterConf: ClusterConf) extends Machines with Logging {
   private val ec2 = new AmazonEC2Client().withRegion[AmazonEC2Client](Regions.fromName(clusterConf.region))
@@ -53,39 +54,43 @@ class EC2Machines(implicit clusterConf: ClusterConf) extends Machines with Loggi
         .map(req => clusterConf.subnetId.map(id => req.withSubnetId(id)).getOrElse(req))
         .get
 
-      log.info(s"Creating $number instances...")
+      log.info(s"[EC2] Creating $number instances...")
       val instances = ec2.runInstances(req).getReservation.getInstances.asScala.toSeq
 
-      val newMachines = instances.zip(names -- existMachines.map(_.name)).flatMap {
+      val results: Seq[Either[Machine, String]] = instances.zip(names -- existMachines.map(_.name)).map {
         case (instance, name) =>
           val id = instance.getInstanceId
           Try {
-            log.info(s"Naming $name.")
-            ec2.createTags(new CreateTagsRequest().withResources(id).withTags(new Tag("Name", name)))
+            retry { i =>
+              log.info(s"[EC2] [$id] Naming instance. Attempts: $i.")
+              ec2.createTags(new CreateTagsRequest().withResources(id).withTags(new Tag("Name", name)))
+            }
 
-            log.info(s"Getting address of $name.")
+            log.info(s"[EC2] [$id] Getting instance's address.")
             val address = if (clusterConf.usePrivateIp) instance.getPrivateIpAddress else instance.getPublicDnsName
             assert(address != null && address != "", "Invalid address: " + address)
 
-            Some(Machine(id, name, address))
+            Left(Machine(id, name, address))
           }.recover {
             case e: Exception =>
-              log.warn(s"AWS API error on $name. Terminating instance ${id}.", e)
-              ec2.terminateInstances(new TerminateInstancesRequest().withInstanceIds(id))
-              None
-          }.recover {
-            case e: Exception =>
-              log.warn("Failed on terminating instance ${id}", e)
-              None
+              log.warn(s"[EC2] [$id] API error when creating instance.", e)
+              Right(id)
           }.get
       }
+
+      val failedIds = results.collect { case Right(id) => id }.toSet
+      if (failedIds.nonEmpty) {
+        destroyMachines(failedIds)
+      }
+
+      val newMachines = results.collect { case Left(machine) => machine }
 
       if (newMachines.size == number) {
         existMachines ++ newMachines
       } else if (attempts > 1) {
         fill(existMachines ++ newMachines, attempts - 1)
       } else {
-        sys.error("Failed on creating enough instances.")
+        sys.error("[EC2] Failed on creating enough instances.")
       }
     }
 
@@ -93,20 +98,32 @@ class EC2Machines(implicit clusterConf: ClusterConf) extends Machines with Loggi
     fill(Seq.empty, 3)
   }
 
-  def destroyMachines(ids: Set[String]) = {
-    ec2.terminateInstances(new TerminateInstancesRequest(ids.toSeq.asJava))
-  }
-
-  def getMachines() = {
+  private def getNonTerminatedInstances() = {
     ec2.describeInstances().getReservations.asScala.flatMap(_.getInstances.asScala).toSeq
       .filter(_.getKeyName == clusterConf.keypair)
       .filter(_.getState.getName != "terminated")
-      .map { i =>
-        Machine(
-          i.getInstanceId,
-          i.getTags().asScala.find(_.getKey == "Name").map(_.getValue).getOrElse(""),
-          if (clusterConf.usePrivateIp) i.getPrivateIpAddress else i.getPublicDnsName
-        )
+  }
+
+  def destroyMachines(ids: Set[String]) = {
+    if (ids.nonEmpty) {
+      log.info(s"[EC2] Terminating ${ids.size} instances.")
+      ec2.terminateInstances(new TerminateInstancesRequest(ids.toSeq.asJava))
+      retry { i =>
+        log.info(s"[EC2] Checking status. Attempts: $i.")
+        val nonTerminatedTargetInstances = getNonTerminatedInstances.filter(ids contains _.getInstanceId).map(_.getInstanceId)
+        assert(nonTerminatedTargetInstances.isEmpty, "[EC2] Some instances are not terminated: " + nonTerminatedTargetInstances.mkString(","))
       }
+      log.info("[EC2] All instances are terminated.")
+    }
+  }
+
+  def getMachines() = {
+    getNonTerminatedInstances.map { i =>
+      Machine(
+        i.getInstanceId,
+        i.getTags().asScala.find(_.getKey == "Name").map(_.getValue).getOrElse(""),
+        if (clusterConf.usePrivateIp) i.getPrivateIpAddress else i.getPublicDnsName
+      )
+    }
   }
 }
