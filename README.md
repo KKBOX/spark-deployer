@@ -106,6 +106,8 @@ cluster-name = "pishen-spark"
 keypair = "pishen"
 pem = "/home/pishen/.ssh/pishen.pem"
 
+# user = "ec2-user"
+
 region = "us-west-2"
 
 # ami = "ami-9ff7e8af"
