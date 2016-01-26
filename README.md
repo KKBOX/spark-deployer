@@ -22,7 +22,7 @@ project-root
 ```
 * Write one line in `project/plugins.sbt`:
 ```
-addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "0.13.0")
+addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "1.0.0")
 ```
 * Write your cluster configuration in `spark-deployer.conf` (see the [example](#cluster-configuration-file) below).
 * Write your Spark project's `build.sbt` (Here we give a simple example):
@@ -33,7 +33,7 @@ lazy val root = (project in file("."))
     version := "0.1",
     scalaVersion := "2.10.6",
     libraryDependencies ++= Seq(
-      "org.apache.spark" %% "spark-core" % "1.5.2" % "provided"
+      "org.apache.spark" %% "spark-core" % "1.6.0" % "provided"
     )
   )
 ```
@@ -77,7 +77,7 @@ object Main {
 ## Embedded mode
 If you don't want to use sbt, or if you would like to trigger the cluster creation from within your Scala application, you can include the library of spark-deployer directly:
 ```
-libraryDependencies += "net.pishen" % "spark-deployer-core_2.10" % "0.13.0"
+libraryDependencies += "net.pishen" %% "spark-deployer-core" % "1.0.0"
 ```
 Then, from your Scala code, you can do something like this:
 ```scala
@@ -106,6 +106,8 @@ cluster-name = "pishen-spark"
 keypair = "pishen"
 pem = "/home/pishen/.ssh/pishen.pem"
 
+# user = "ec2-user"
+
 region = "us-west-2"
 
 # ami = "ami-9ff7e8af"
@@ -124,7 +126,7 @@ worker {
 
 # retry-attempts = 20
 
-spark-tgz-url = "http://d3kbcqa49mib13.cloudfront.net/spark-1.5.2-bin-hadoop2.4.tgz"
+spark-tgz-url = "http://d3kbcqa49mib13.cloudfront.net/spark-1.6.0-bin-hadoop2.4.tgz"
 
 main-class = "mypackage.Main"
 
@@ -142,9 +144,10 @@ main-class = "mypackage.Main"
 
 # destroy-on-fail = true
 
-# thread-pool-size = 10
+# thread-pool-size = 100
 ```
 * You can provide your own `ami`, the image should be HVM EBS-Backed with Java 7+ installed.
+* You can provide your own `user`, which will be the username used to login AWS machine.
 * Currently tested `instance-type`s are `t2.medium`, `m3.medium`, and `c4.xlarge`. All the M3, M4, C3, and C4 types should work, please report an issue if you encountered a problem.
 * Value of `disk-size` is in GB, which should be at least 8. It resets the size of root partition, which is used by both OS and Spark.
 * `driver-memory` and `executor-memory` are the memory available for Spark, you may subtract 2G from the physically available memory on that machine.

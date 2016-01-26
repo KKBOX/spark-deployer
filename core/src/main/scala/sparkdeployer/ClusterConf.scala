@@ -31,6 +31,7 @@ class ClusterConf(configFile: File) {
     require(pemFile.exists(), "I can't find your pem file at " + pemFile.getAbsolutePath)
     pemFile.getAbsolutePath
   }
+  val user = config.as[Option[String]]("user").getOrElse("ec2-user")
 
   val region = config.as[String]("region")
   
@@ -56,7 +57,7 @@ class ClusterConf(configFile: File) {
   val workerDiskSize = config.as[Int]("worker.disk-size")
   val executorMemory = config.as[Option[String]]("worker.executor-memory")
 
-  val retryAttempts = config.as[Option[Int]]("retry-attempts").getOrElse(10)
+  val retryAttempts = config.as[Option[Int]]("retry-attempts").getOrElse(20)
 
   val sparkTgzUrl = config.as[String]("spark-tgz-url")
   val sparkTgzName = {
@@ -75,7 +76,7 @@ class ClusterConf(configFile: File) {
   
   val destroyOnFail = config.as[Option[Boolean]]("destroy-on-fail").getOrElse(false)
   
-  val threadPoolSize = config.as[Option[Int]]("thread-pool-size").getOrElse(10)
+  val threadPoolSize = config.as[Option[Int]]("thread-pool-size").getOrElse(100)
 }
 
 object ClusterConf {
