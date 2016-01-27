@@ -14,13 +14,13 @@
 
 package sparkdeployer
 
+import Helpers.retry
 import com.amazonaws.regions.Regions
 import com.amazonaws.services.ec2.AmazonEC2Client
 import com.amazonaws.services.ec2.model.{BlockDeviceMapping, CreateTagsRequest, EbsBlockDevice, RunInstancesRequest, Tag, TerminateInstancesRequest}
 import org.slf4s.Logging
 import scala.collection.JavaConverters._
-import scala.util.Try
-import Helpers.retry
+import scala.util.{Failure, Success, Try}
 
 class EC2Machines(implicit clusterConf: ClusterConf) extends Machines with Logging {
   private val ec2 = new AmazonEC2Client().withRegion[AmazonEC2Client](Regions.fromName(clusterConf.region))
@@ -66,18 +66,30 @@ class EC2Machines(implicit clusterConf: ClusterConf) extends Machines with Loggi
               ec2.createTags(new CreateTagsRequest().withResources(id).withTags(new Tag("Name", name)))
             }
 
-            log.info(s"[EC2] [$id] Getting instance's address.")
-            val address = if (clusterConf.usePrivateIp) instance.getPrivateIpAddress else instance.getPublicDnsName
-            assert(address != null && address != "", "Invalid address: " + address)
+            //retry getting address if the instance exists.
+            val address = retry { i =>
+              log.info(s"[EC2] [$id] Getting instance's address. Attempts: $i.")
+              getNonTerminatedInstances.find(_.getInstanceId == id) match {
+                case Some(instance) =>
+                  val address = if (clusterConf.usePrivateIp) instance.getPrivateIpAddress else instance.getPublicDnsName
+                  if (address == null || address == "") {
+                    sys.error(s"Invalid address: $address")
+                  }
+                  Some(address)
+                case None => None
+              }
+            }.getOrElse(sys.error("Instance not found when getting address."))
 
-            Left(Machine(id, name, address))
-          }.recover {
-            case e: Exception =>
+            Machine(id, name, address)
+          } match {
+            case Success(m) => Left(m)
+            case Failure(e) =>
               log.warn(s"[EC2] [$id] API error when creating instance.", e)
               Right(id)
-          }.get
+          }
       }
 
+      //since destroyMachines need to check status, destroy them all together.
       val failedIds = results.collect { case Right(id) => id }.toSet
       if (failedIds.nonEmpty) {
         destroyMachines(failedIds)
@@ -105,12 +117,14 @@ class EC2Machines(implicit clusterConf: ClusterConf) extends Machines with Loggi
   }
 
   def destroyMachines(ids: Set[String]) = {
-    if (ids.nonEmpty) {
-      log.info(s"[EC2] Terminating ${ids.size} instances.")
-      ec2.terminateInstances(new TerminateInstancesRequest(ids.toSeq.asJava))
+    val existingIds = getNonTerminatedInstances.map(_.getInstanceId).toSet & ids
+
+    if (existingIds.nonEmpty) {
+      log.info(s"[EC2] Terminating ${existingIds.size} instances.")
+      ec2.terminateInstances(new TerminateInstancesRequest(existingIds.toSeq.asJava))
       retry { i =>
         log.info(s"[EC2] Checking status. Attempts: $i.")
-        val nonTerminatedTargetInstances = getNonTerminatedInstances.filter(ids contains _.getInstanceId).map(_.getInstanceId)
+        val nonTerminatedTargetInstances = getNonTerminatedInstances.map(_.getInstanceId).toSet & existingIds
         assert(nonTerminatedTargetInstances.isEmpty, "[EC2] Some instances are not terminated: " + nonTerminatedTargetInstances.mkString(","))
       }
       log.info("[EC2] All instances are terminated.")
