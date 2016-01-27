@@ -14,23 +14,19 @@
 
 package sparkdeployer
 
-import com.amazonaws.regions.Regions
-import com.amazonaws.services.ec2.AmazonEC2Client
-import com.amazonaws.services.ec2.model.{BlockDeviceMapping, CreateTagsRequest, EbsBlockDevice, Instance, RunInstancesRequest, Tag, TerminateInstancesRequest}
 import java.io.File
-import java.util.concurrent.Executors
+import java.util.concurrent.ForkJoinPool
 import org.slf4s.Logging
 import scala.collection.JavaConverters._
-import scala.concurrent.ExecutionContext
-import scala.concurrent.{Await, Future}
+import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration.Duration
 import scala.sys.process.stringSeqToProcess
 import scala.util.{Failure, Success, Try}
 
 class SparkDeployer(val clusterConf: ClusterConf) extends Logging {
   implicit val iClusterConf = clusterConf
-  implicit val ec = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(clusterConf.threadPoolSize))
-
+  implicit val ec = ExecutionContext.fromExecutorService(new ForkJoinPool(clusterConf.threadPoolSize))
+  
   private val masterName = clusterConf.clusterName + "-master"
   private val workerPrefix = clusterConf.clusterName + "-worker"
 
