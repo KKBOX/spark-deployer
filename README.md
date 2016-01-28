@@ -98,6 +98,11 @@ sparkDeployer.destroyCluster()
 * You may prepare the `job.jar` by sbt-assembly from other sbt project with Spark.
 * For other available functions, check `SparkDeployer.scala` in our source code.
 
+spark-deployer uses slf4j, remember to add your own backend to see the log. For example, to print the log on screen, add
+```
+libraryDependencies += "org.slf4j" % "slf4j-simple" % "1.7.14"
+```
+
 ## Cluster configuration file
 Here we give an example of `spark-deployer.conf` (settings commented out with `#` are optional):
 ```
