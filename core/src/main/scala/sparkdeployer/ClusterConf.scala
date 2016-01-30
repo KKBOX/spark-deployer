@@ -77,6 +77,8 @@ class ClusterConf(configFile: File) {
   val destroyOnFail = config.as[Option[Boolean]]("destroy-on-fail").getOrElse(false)
   
   val threadPoolSize = config.as[Option[Int]]("thread-pool-size").getOrElse(100)
+  
+  val enableS3A = config.as[Option[Boolean]]("enable-s3a").getOrElse(false)
 }
 
 object ClusterConf {
