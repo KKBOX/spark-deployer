@@ -247,7 +247,7 @@ class SparkDeployer(val clusterConf: ClusterConf) extends Logging {
           Seq(
             "--jars", "aws-java-sdk-1.7.4.jar,hadoop-aws-2.7.1.jar",
             "--conf", "spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem",
-            "--conf", "spark.hadoop.fs.s3a.fast.upload=true"
+            "--conf", "spark.hadoop.fs.s3a.buffer.dir=/tmp"
           )
         } else Seq.empty)
         .++("job.jar" +: args)
