@@ -26,7 +26,7 @@ import scala.util.{Failure, Success, Try}
 class SparkDeployer(val clusterConf: ClusterConf) extends Logging {
   implicit val iClusterConf = clusterConf
   implicit val ec = ExecutionContext.fromExecutorService(new ForkJoinPool(clusterConf.threadPoolSize))
-  
+
   private val masterName = clusterConf.clusterName + "-master"
   private val workerPrefix = clusterConf.clusterName + "-worker"
 
@@ -87,6 +87,22 @@ class SparkDeployer(val clusterConf: ClusterConf) extends Logging {
     assert(getMasterOpt.isEmpty, s"[$masterName] Master already exists.")
     val master = machines.createMachine(Master, masterName)
     downloadSpark(master)
+    if (clusterConf.enableS3A) {
+      SSH(master.address)
+        .withRemoteCommand(Seq(
+          "wget",
+          "-nv",
+          "https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk/1.7.4/aws-java-sdk-1.7.4.jar",
+          "&&",
+          "wget",
+          "-nv",
+          "https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/2.7.1/hadoop-aws-2.7.1.jar"
+        ).mkString(" "))
+        .withRetry
+        .withRunningMessage(s"[$masterName] Downloading s3a jars.")
+        .withErrorMessage(s"[$masterName] Failed downloading s3a jars.")
+        .run
+    }
     setupSparkEnv(master, None)
     runSparkSbin(master, "start-master.sh")
     log.info(s"[$masterName] Master started.")
@@ -227,6 +243,13 @@ class SparkDeployer(val clusterConf: ClusterConf) extends Logging {
         .++(clusterConf.appName.toSeq.flatMap(n => Seq("--name", n)))
         .++(clusterConf.driverMemory.toSeq.flatMap(m => Seq("--driver-memory", m)))
         .++(clusterConf.executorMemory.toSeq.flatMap(m => Seq("--executor-memory", m)))
+        .++(if (clusterConf.enableS3A) {
+          Seq(
+            "--jars", "aws-java-sdk-1.7.4.jar,hadoop-aws-2.7.1.jar",
+            "--conf", "spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem",
+            "--conf", "spark.hadoop.fs.s3a.buffer.dir=/tmp"
+          )
+        } else Seq.empty)
         .++("job.jar" +: args)
         .mkString(" ")
 
