@@ -22,7 +22,7 @@ project-root
 ```
 * Write one line in `project/plugins.sbt`:
 ```
-addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "1.0.1")
+addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "1.1.0")
 ```
 * Write your cluster configuration in `spark-deployer.conf` (see the [example](#cluster-configuration-file) below).
 * Write your Spark project's `build.sbt` (Here we give a simple example):
@@ -77,7 +77,7 @@ object Main {
 ## Embedded mode
 If you don't want to use sbt, or if you would like to trigger the cluster creation from within your Scala application, you can include the library of spark-deployer directly:
 ```
-libraryDependencies += "net.pishen" %% "spark-deployer-core" % "1.0.1"
+libraryDependencies += "net.pishen" %% "spark-deployer-core" % "1.1.0"
 ```
 Then, from your Scala code, you can do something like this:
 ```scala
@@ -150,6 +150,8 @@ main-class = "mypackage.Main"
 # destroy-on-fail = true
 
 # thread-pool-size = 100
+
+# enable-s3a = true
 ```
 * You can provide your own `ami`, the image should be HVM EBS-Backed with Java 7+ installed.
 * You can provide your own `user`, which will be the username used to login AWS machine.
@@ -169,3 +171,4 @@ main-class = "mypackage.Main"
   * Please check [Spark security page](http://spark.apache.org/docs/latest/security.html#configuring-ports-for-network-security) for more information about port settings.
 * `spark-env` adds the additional Spark settings to `conf/spark-env.sh` on each node. Note that `SPARK_MASTER_IP`, `SPARK_MASTER_PORT`, and `SPARK_PUBLIC_DNS` are hard-coded for now.
 * `destroy-on-fail`: if set to `true`, destroy the cluster when spark-deployer met an error in `sparkCreateCluster` or `sparkSubmitJob`. Note that you still need to destroy the cluster by yourself if no error happens.
+* `enable-s3a`: if set to `true`, add the support for s3a (require hadoop 2.0+). We use the workaround as described [here](http://deploymentzone.com/2015/12/20/s3a-on-spark-on-aws-ec2/).
