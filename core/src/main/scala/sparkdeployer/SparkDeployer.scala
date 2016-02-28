@@ -217,7 +217,7 @@ class SparkDeployer(val clusterConf: ClusterConf) extends Logging {
           "--progress",
           "-ve", sshCmd,
           jar.getAbsolutePath,
-          s"ec2-user@$masterAddress:~/job.jar"
+          s"${clusterConf.user}@${masterAddress}:~/job.jar"
         )
         log.info(uploadJarCmd.mkString(" "))
         if (uploadJarCmd.! != 0) {
