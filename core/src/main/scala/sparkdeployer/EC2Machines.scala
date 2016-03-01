@@ -34,7 +34,7 @@ class EC2Machines(implicit clusterConf: ClusterConf) extends Machines with Loggi
       val req = Some(new RunInstancesRequest())
         .map {
           _.withBlockDeviceMappings(new BlockDeviceMapping()
-            .withDeviceName("/dev/xvda")
+            .withDeviceName(clusterConf.rootDevice)
             .withEbs(new EbsBlockDevice()
               .withVolumeSize(machineType match {
                 case Master => clusterConf.masterDiskSize

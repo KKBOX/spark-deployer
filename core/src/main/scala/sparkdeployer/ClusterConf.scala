@@ -31,7 +31,6 @@ class ClusterConf(configFile: File) {
     require(pemFile.exists(), "I can't find your pem file at " + pemFile.getAbsolutePath)
     pemFile.getAbsolutePath
   }
-  val user = config.as[Option[String]]("user").getOrElse("ec2-user")
 
   val region = config.as[String]("region")
   
@@ -48,6 +47,8 @@ class ClusterConf(configFile: File) {
       case "sa-east-1" => "ami-3b0c9926"
     }
   }
+  val user = config.as[Option[String]]("user").getOrElse("ec2-user")
+  val rootDevice = config.as[Option[String]]("root-device").getOrElse("/dev/xvda")
 
   val masterInstanceType = config.as[String]("master.instance-type")
   val masterDiskSize = config.as[Int]("master.disk-size")
