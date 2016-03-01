@@ -22,7 +22,7 @@ project-root
 ```
 * Write one line in `project/plugins.sbt`:
 ```
-addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "1.1.1")
+addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "1.2.0")
 ```
 * Write your cluster configuration in `spark-deployer.conf` (see the [example](#cluster-configuration-file) below).
 * Write your Spark project's `build.sbt` (Here we give a simple example):
@@ -77,7 +77,7 @@ object Main {
 ## Embedded mode
 If you don't want to use sbt, or if you would like to trigger the cluster creation from within your Scala application, you can include the library of spark-deployer directly:
 ```
-libraryDependencies += "net.pishen" %% "spark-deployer-core" % "1.1.1"
+libraryDependencies += "net.pishen" %% "spark-deployer-core" % "1.2.0"
 ```
 Then, from your Scala code, you can do something like this:
 ```scala
@@ -111,11 +111,11 @@ cluster-name = "pishen-spark"
 keypair = "pishen"
 pem = "/home/pishen/.ssh/pishen.pem"
 
-# user = "ec2-user"
-
 region = "us-west-2"
 
-# ami = "ami-9ff7e8af"
+# ami = "ami-acd63bcc"
+# user = "ubuntu"
+# root-device = "/dev/sda1"
 
 master {
   instance-type = "c4.large"
@@ -155,6 +155,7 @@ main-class = "mypackage.Main"
 ```
 * You can provide your own `ami`, the image should be HVM EBS-Backed with Java 7+ installed.
 * You can provide your own `user`, which will be the username used to login AWS machine.
+* You can provide your own `root-device`, which will be your root volume's name that can be enlarged by `disk-size` in `master` and `worker` settings.
 * Currently tested `instance-type`s are `t2.medium`, `m3.medium`, and `c4.xlarge`. All the M3, M4, C3, and C4 types should work, please report an issue if you encountered a problem.
 * Value of `disk-size` is in GB, which should be at least 8. It resets the size of root partition, which is used by both OS and Spark.
 * `driver-memory` and `executor-memory` are the memory available for Spark, you may subtract 2G from the physically available memory on that machine.
