@@ -53,7 +53,9 @@ object SparkDeployerPlugin extends AutoPlugin {
   import autoImport._
   override def trigger = allRequirements
 
-  lazy val sparkDeployer = new SparkDeployer(ClusterConf.fromFile("spark-deployer.conf"))
+  lazy val sparkDeployer = {
+    new SparkDeployer(ClusterConf.fromFile(sys.env.get("SPARK_DEPLOYER_CONF").getOrElse("spark-deployer.conf")))
+  }
   
   override lazy val projectSettings = Seq(
     sparkClusterConf := sparkDeployer.clusterConf.config,
