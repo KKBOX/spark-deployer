@@ -14,6 +14,7 @@
 
 package sparkdeployer
 
+import com.typesafe.config.{ Config, ConfigFactory }
 import java.io.File
 import java.util.concurrent.ForkJoinPool
 import org.slf4s.Logging
@@ -23,8 +24,8 @@ import scala.concurrent.duration.Duration
 import scala.sys.process.stringSeqToProcess
 import scala.util.{Failure, Success, Try}
 
-class SparkDeployer(val clusterConf: ClusterConf) extends Logging {
-  implicit val iClusterConf = clusterConf
+class SparkDeployer(val config: Config) extends Logging {
+  implicit val clusterConf = new ClusterConf(config)
   implicit val ec = ExecutionContext.fromExecutorService(new ForkJoinPool(clusterConf.threadPoolSize))
 
   private val masterName = clusterConf.clusterName + "-master"
@@ -261,5 +262,10 @@ class SparkDeployer(val clusterConf: ClusterConf) extends Logging {
         .run
     }
   }
+}
 
+object SparkDeployer {
+  def fromConfig(config: Config) = new SparkDeployer(config)
+  def fromFile(configFile: File) = fromConfig(ConfigFactory.parseFile(configFile).resolve())
+  def fromFile(configPath: String): SparkDeployer = fromFile(new File(configPath))
 }

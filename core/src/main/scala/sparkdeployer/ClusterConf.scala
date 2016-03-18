@@ -16,12 +16,11 @@ package sparkdeployer
 
 import java.io.File
 
-import com.typesafe.config.ConfigFactory
-
+import com.typesafe.config.Config
 import net.ceedubs.ficus.Ficus._
 
-class ClusterConf(configFile: File) {
-  val config = ConfigFactory.parseFile(configFile).resolve()
+class ClusterConf(config: Config) {
+  val platform = config.as[Option[String]]("platform").getOrElse("ec2")
 
   val clusterName = config.as[String]("cluster-name")
 
@@ -80,9 +79,4 @@ class ClusterConf(configFile: File) {
   val threadPoolSize = config.as[Option[Int]]("thread-pool-size").getOrElse(100)
   
   val enableS3A = config.as[Option[Boolean]]("enable-s3a").getOrElse(false)
-}
-
-object ClusterConf {
-  def fromFile(configFile: File) = new ClusterConf(configFile)
-  def fromFile(configPath: String) = new ClusterConf(new File(configPath))
 }

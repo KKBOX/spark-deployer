@@ -15,11 +15,12 @@
 package sparkdeployer
 
 import com.amazonaws.services.s3.model.DeleteObjectsRequest
-import com.typesafe.config.Config
+import com.typesafe.config.{ Config, ConfigFactory }
 
 import awscala.s3.Bucket
 import awscala.s3.S3
 import awscala.Region0
+import java.io.File
 import org.slf4j.impl.StaticLoggerBinder
 import sbt.AutoPlugin
 import sbt.Def.macroValueIT
@@ -33,7 +34,7 @@ import sbtassembly.AssemblyKeys.assembly
 object SparkDeployerPlugin extends AutoPlugin {
 
   object autoImport {
-    lazy val sparkClusterConf = taskKey[Config]("Raw configuration.")
+    lazy val sparkDeployerConf = taskKey[Config]("Raw configuration.")
 
     lazy val sparkCreateMaster = taskKey[Unit]("Create master.")
     lazy val sparkAddWorkers = inputKey[Unit]("Add workers.")
@@ -52,13 +53,13 @@ object SparkDeployerPlugin extends AutoPlugin {
   }
   import autoImport._
   override def trigger = allRequirements
-
+  
   lazy val sparkDeployer = {
-    new SparkDeployer(ClusterConf.fromFile(sys.env.get("SPARK_DEPLOYER_CONF").getOrElse("spark-deployer.conf")))
+    SparkDeployer.fromFile(sys.env.get("SPARK_DEPLOYER_CONF").getOrElse("spark-deployer.conf"))
   }
   
   override lazy val projectSettings = Seq(
-    sparkClusterConf := sparkDeployer.clusterConf.config,
+    sparkDeployerConf := sparkDeployer.config,
 
     sparkCreateMaster := {
       StaticLoggerBinder.sbtLogger = streams.value.log
