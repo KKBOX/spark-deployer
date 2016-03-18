@@ -31,23 +31,7 @@ class ClusterConf(config: Config) {
     pemFile.getAbsolutePath
   }
 
-  val region = config.as[String]("region")
-  
-  val ami = config.as[Option[String]]("ami").getOrElse {
-    region match {
-      case "us-east-1" => "ami-e3106686"
-      case "us-west-2" => "ami-9ff7e8af"
-      case "us-west-1" => "ami-cd3aff89"
-      case "eu-west-1" => "ami-69b9941e"
-      case "eu-central-1" => "ami-daaeaec7"
-      case "ap-southeast-1" => "ami-52978200"
-      case "ap-southeast-2" => "ami-c11856fb"
-      case "ap-northeast-1" => "ami-9a2fb89a"
-      case "sa-east-1" => "ami-3b0c9926"
-    }
-  }
   val user = config.as[Option[String]]("user").getOrElse("ec2-user")
-  val rootDevice = config.as[Option[String]]("root-device").getOrElse("/dev/xvda")
 
   val masterInstanceType = config.as[String]("master.instance-type")
   val masterDiskSize = config.as[Int]("master.disk-size")
@@ -69,8 +53,6 @@ class ClusterConf(config: Config) {
   val mainClass = config.as[String]("main-class")
   val appName = config.as[Option[String]]("app-name")
 
-  val subnetId = config.as[Option[String]]("subnet-id")
-  val usePrivateIp = config.as[Option[Boolean]]("use-private-ip").getOrElse(false)
   val securityGroupIds = config.as[Option[Set[String]]]("security-group-ids")
   val sparkEnv = config.as[Option[Seq[String]]]("spark-env").getOrElse(Seq.empty)
   

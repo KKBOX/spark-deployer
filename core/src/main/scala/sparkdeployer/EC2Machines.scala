@@ -18,11 +18,34 @@ import Helpers.retry
 import com.amazonaws.regions.Regions
 import com.amazonaws.services.ec2.AmazonEC2Client
 import com.amazonaws.services.ec2.model.{BlockDeviceMapping, CreateTagsRequest, EbsBlockDevice, RunInstancesRequest, Tag, TerminateInstancesRequest}
+import com.typesafe.config.Config
 import org.slf4s.Logging
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
+import net.ceedubs.ficus.Ficus._
 
-class EC2Machines(implicit clusterConf: ClusterConf) extends Machines with Logging {
+class EC2Machines(config: Config) extends Machines with Logging {
+  class EC2Conf(config: Config) extends ClusterConf(config) {
+    val region = config.as[String]("region")
+    val ami = config.as[Option[String]]("ami").getOrElse {
+      region match {
+        case "us-east-1" => "ami-e3106686"
+        case "us-west-2" => "ami-9ff7e8af"
+        case "us-west-1" => "ami-cd3aff89"
+        case "eu-west-1" => "ami-69b9941e"
+        case "eu-central-1" => "ami-daaeaec7"
+        case "ap-southeast-1" => "ami-52978200"
+        case "ap-southeast-2" => "ami-c11856fb"
+        case "ap-northeast-1" => "ami-9a2fb89a"
+        case "sa-east-1" => "ami-3b0c9926"
+      }
+    }
+    val rootDevice = config.as[Option[String]]("root-device").getOrElse("/dev/xvda")
+    val subnetId = config.as[Option[String]]("subnet-id")
+    val usePrivateIp = config.as[Option[Boolean]]("use-private-ip").getOrElse(false)
+  }
+  implicit val clusterConf = new EC2Conf(config)
+  
   private val ec2 = new AmazonEC2Client().withRegion[AmazonEC2Client](Regions.fromName(clusterConf.region))
 
   def createMachines(machineType: MachineType, names: Set[String]) = {
