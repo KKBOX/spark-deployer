@@ -41,6 +41,8 @@ class EC2Machines(config: Config) extends Machines with Logging {
       }
     }
     val rootDevice = config.as[Option[String]]("root-device").getOrElse("/dev/xvda")
+    val masterDiskSize = config.as[Int]("master.disk-size")
+    val workerDiskSize = config.as[Int]("worker.disk-size")
     val subnetId = config.as[Option[String]]("subnet-id")
     val usePrivateIp = config.as[Option[Boolean]]("use-private-ip").getOrElse(false)
   }

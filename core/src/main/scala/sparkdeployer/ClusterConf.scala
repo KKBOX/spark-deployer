@@ -34,11 +34,9 @@ class ClusterConf(config: Config) {
   val user = config.as[Option[String]]("user").getOrElse("ec2-user")
 
   val masterInstanceType = config.as[String]("master.instance-type")
-  val masterDiskSize = config.as[Int]("master.disk-size")
   val driverMemory = config.as[Option[String]]("master.driver-memory")
 
   val workerInstanceType = config.as[String]("worker.instance-type")
-  val workerDiskSize = config.as[Int]("worker.disk-size")
   val executorMemory = config.as[Option[String]]("worker.executor-memory")
 
   val retryAttempts = config.as[Option[Int]]("retry-attempts").getOrElse(20)
