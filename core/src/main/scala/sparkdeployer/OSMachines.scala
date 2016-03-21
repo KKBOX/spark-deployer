@@ -40,9 +40,9 @@ class OSMachines(config: Config) extends Machines with Logging {
     val os_tenant_id = config.as[String]("os-tenant-id")
     val os_tenant_name = config.as[String]("os-tenant-name")
     val os_username = config.as[String]("os-username")
-    private val standardIn = System.console()
-    print("Password> ")
-    val os_password = standardIn.readPassword().toString
+    //private val standardIn = System.console()
+    //val os_password = standardIn.readPassword("Password> ").mkString
+    val os_password = config.as[String]("os-password")
     // TODO: attach extra disk
     //val rootDevice = config.as[Option[String]]("root-device").getOrElse("/dev/xvda")
   }
@@ -57,7 +57,8 @@ class OSMachines(config: Config) extends Machines with Logging {
     .authenticate()
 
   def createMachines(machineType: MachineType, names: Set[String]): Seq[Machine] = {
-    names.toSeq.par.map { name =>
+    log.info(s"[OpenStack] Creating ${names.size} instances...")
+    names.toSeq.map { name =>
       val flavor = os.compute().flavors().list().asScala.find(_.getName() == (machineType match {
         case Master => clusterConf.masterInstanceType
         case Worker => clusterConf.workerInstanceType
@@ -73,50 +74,38 @@ class OSMachines(config: Config) extends Machines with Logging {
                               .keypairName(clusterConf.keypair)
                               .networks(clusterConf.networkIds.toList.asJava)
                               .build();
+      log.info(s"[OpenStack] Creating instance '${name}' ...")
       val server: Server = os.compute().servers().boot(serverCreate)
       retry { i =>
-        val serverNow = os.compute().servers().list().asScala.find(_.getId() == server.getId()).get
-        assert(serverNow.getId() != null)
-        assert(serverNow.getName() != null)
-        val networkName = os.networking().network().get(clusterConf.networkIds.head).getName()
-        val addr = serverNow.getAddresses().getAddresses(networkName).asScala.head.getAddr()
-        assert(addr != null)
-        Machine(serverNow.getId(), serverNow.getName(), addr)
+        log.info(s"[OpenStack] [${name}] Getting instance's address. Attempts: $i.")
+        val thatServer = os.compute().servers().list().asScala.find(_.getId() == server.getId()).get
+        val m = getMachine(thatServer)
+        assert(m.id != null)
+        assert(m.name != null)
+        assert(m.address != null)
+        m
       }
-    }.seq
+    }
   }
 
-  private def getNonTerminatedInstances() = {
-    ???
-  //  ec2.describeInstances().getReservations.asScala.flatMap(_.getInstances.asScala).toSeq
-  //    .filter(_.getKeyName == clusterConf.keypair)
-  //    .filter(_.getState.getName != "terminated")
+  private def getMachine(server: Server) = {
+    val networkName = os.networking().network().get(clusterConf.networkIds.head).getName()
+    val addr = server.getAddresses().getAddresses(networkName).asScala.head.getAddr()
+    Machine(server.getId(), server.getName(), addr)
   }
 
-  def destroyMachines(ids: Set[String]) = {
-    ???
-  //  val existingIds = getNonTerminatedInstances.map(_.getInstanceId).toSet & ids
-
-  //  if (existingIds.nonEmpty) {
-  //    log.info(s"[EC2] Terminating ${existingIds.size} instances.")
-  //    ec2.terminateInstances(new TerminateInstancesRequest(existingIds.toSeq.asJava))
-  //    retry { i =>
-  //      log.info(s"[EC2] Checking status. Attempts: $i.")
-  //      val nonTerminatedTargetInstances = getNonTerminatedInstances.map(_.getInstanceId).toSet & existingIds
-  //      assert(nonTerminatedTargetInstances.isEmpty, "[EC2] Some instances are not terminated: " + nonTerminatedTargetInstances.mkString(","))
-  //    }
-  //    log.info("[EC2] All instances are terminated.")
-  //  }
+  def getMachines(): Seq[Machine] = {
+    os.compute().servers().list().asScala.map { s =>
+      getMachine(s)
+    }
   }
 
-  def getMachines() = {
-    ???
-  //  getNonTerminatedInstances.map { i =>
-  //    Machine(
-  //      i.getInstanceId,
-  //      i.getTags().asScala.find(_.getKey == "Name").map(_.getValue).getOrElse(""),
-  //      if (clusterConf.usePrivateIp) i.getPrivateIpAddress else i.getPublicDnsName
-  //    )
-  //  }
+  def destroyMachines(ids: Set[String]): Unit = {
+    val toKill = getMachines.filter { m => ids.contains(m.name) }
+    log.info(s"[OpenStack] Terminating ${toKill.size} instances.")
+    toKill.map { m =>
+      os.compute().servers().delete(m.id)
+    }
+    log.info("[OpenStack] All instances are terminated.")
   }
 }
