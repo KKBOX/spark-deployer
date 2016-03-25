@@ -31,7 +31,8 @@ class SparkDeployer(val config: Config) extends Logging {
   private val masterName = clusterConf.clusterName + "-master"
   private val workerPrefix = clusterConf.clusterName + "-worker"
 
-  private val machines = new EC2Machines(config)
+  private val machines =
+      if (clusterConf.platform != "ec2") new EC2Machines(config) else new OSMachines(config)
 
   //helper functions
   def getMasterOpt() = machines.getMachines.find(_.name == masterName)
