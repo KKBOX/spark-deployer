@@ -48,7 +48,7 @@ class OSMachines(config: Config) extends Machines with Logging {
   }
   implicit val clusterConf = new OSConf(config)
 
-  private val os: OSClient = OSFactory.builder()
+  private def os(): OSClient = OSFactory.builder()
     .endpoint(clusterConf.os_auth_url)
     .credentials(clusterConf.os_username, clusterConf.os_password)
     .tenantId(clusterConf.os_tenant_id)
@@ -59,11 +59,11 @@ class OSMachines(config: Config) extends Machines with Logging {
   def createMachines(machineType: MachineType, names: Set[String]): Seq[Machine] = {
     log.info(s"[OpenStack] Creating ${names.size} instances...")
     names.toSeq.map { name =>
-      val flavor = os.compute().flavors().list().asScala.find(_.getName() == (machineType match {
+      val flavor = os().compute().flavors().list().asScala.find(_.getName() == (machineType match {
         case Master => clusterConf.masterInstanceType
         case Worker => clusterConf.workerInstanceType
       })).get
-      val image = os.compute().images().get(clusterConf.imageId)
+      val image = os().compute().images().get(clusterConf.imageId)
 
       val bs = Builders.server()
       val serverCreate: ServerCreate = clusterConf.securityGroupIds
@@ -75,10 +75,10 @@ class OSMachines(config: Config) extends Machines with Logging {
                               .networks(clusterConf.networkIds.toList.asJava)
                               .build();
       log.info(s"[OpenStack] Creating instance '${name}' ...")
-      val server: Server = os.compute().servers().boot(serverCreate)
+      val server: Server = os().compute().servers().boot(serverCreate)
       retry { i =>
         log.info(s"[OpenStack] [${name}] Getting instance's address. Attempts: $i.")
-        val thatServer = os.compute().servers().list().asScala.find(_.getId() == server.getId()).get
+        val thatServer = os().compute().servers().list().asScala.find(_.getId() == server.getId()).get
         val m = getMachine(thatServer)
         assert(m.id != null)
         assert(m.name != null)
@@ -89,22 +89,27 @@ class OSMachines(config: Config) extends Machines with Logging {
   }
 
   private def getMachine(server: Server) = {
-    val networkName = os.networking().network().get(clusterConf.networkIds.head).getName()
+    // not use first one
+    val networkName = os().networking().network().get(clusterConf.networkIds.head).getName()
     val addr = server.getAddresses().getAddresses(networkName).asScala.head.getAddr()
     Machine(server.getId(), server.getName(), addr)
   }
 
   def getMachines(): Seq[Machine] = {
-    os.compute().servers().list().asScala.map { s =>
+    os().compute().servers().list().asScala.map { s =>
       getMachine(s)
     }
   }
 
   def destroyMachines(ids: Set[String]): Unit = {
-    val toKill = getMachines.filter { m => ids.contains(m.name) }
+    val toKill = getMachines.filter { m => ids.contains(m.id) }
     log.info(s"[OpenStack] Terminating ${toKill.size} instances.")
     toKill.map { m =>
-      os.compute().servers().delete(m.id)
+      os().compute().servers().delete(m.id)
+    }
+    retry { i =>
+      val liveMachines = getMachines.filter { m => ids.contains(m.id) }
+      assert(liveMachines.size == 0)
     }
     log.info("[OpenStack] All instances are terminated.")
   }
