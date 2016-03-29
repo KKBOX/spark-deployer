@@ -15,10 +15,6 @@
 package sparkdeployer
 
 import Helpers.retry
-//import com.amazonaws.regions.Regions
-//import com.amazonaws.services.ec2.AmazonEC2Client
-//import com.amazonaws.services.ec2.model.{BlockDeviceMapping, CreateTagsRequest, EbsBlockDevice, RunInstancesRequest, Tag, TerminateInstancesRequest}
-//import scala.util.{Failure, Success, Try}
 import org.slf4s.Logging
 import com.typesafe.config._
 import net.ceedubs.ficus.Ficus._
@@ -41,8 +37,9 @@ class OSMachines(config: Config) extends Machines with Logging {
     val os_tenant_name = config.as[String]("os-tenant-name")
     val os_username = config.as[String]("os-username")
     //private val standardIn = System.console()
-    //val os_password = standardIn.readPassword("Password> ").mkString
+    //val os_password = standardIn.readPassword("Please enter password> ").mkString
     val os_password = config.as[String]("os-password")
+
     // TODO: attach extra disk
     //val rootDevice = config.as[Option[String]]("root-device").getOrElse("/dev/xvda")
   }
@@ -108,6 +105,7 @@ class OSMachines(config: Config) extends Machines with Logging {
       os().compute().servers().delete(m.id)
     }
     retry { i =>
+      log.info(s"[OpenStack] Checking status. Attempts: ${i}.")
       val liveMachines = getMachines.filter { m => ids.contains(m.id) }
       assert(liveMachines.size == 0)
     }
