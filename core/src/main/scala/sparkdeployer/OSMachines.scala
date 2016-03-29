@@ -36,9 +36,8 @@ class OSMachines(config: Config) extends Machines with Logging {
     val os_tenant_id = config.as[String]("os-tenant-id")
     val os_tenant_name = config.as[String]("os-tenant-name")
     val os_username = config.as[String]("os-username")
-    //private val standardIn = System.console()
-    //val os_password = standardIn.readPassword("Please enter password> ").mkString
-    val os_password = config.as[String]("os-password")
+    private val standardIn = System.console()
+    val os_password = standardIn.readPassword("Please enter password> ").mkString
 
     // TODO: attach extra disk
     //val rootDevice = config.as[Option[String]]("root-device").getOrElse("/dev/xvda")
