@@ -31,7 +31,8 @@ lazy val core = (project in file("core"))
       "net.ceedubs" %% "ficus" % "[1.0.1,1.1.2]",
       "com.github.seratch" %% "awscala" % "0.5.5" excludeAll(ExclusionRule(organization = "com.amazonaws")),
       "com.amazonaws" % "aws-java-sdk-s3" % "1.10.34",
-      "com.amazonaws" % "aws-java-sdk-ec2" % "1.10.34"
+      "com.amazonaws" % "aws-java-sdk-ec2" % "1.10.34",
+      "org.pacesys" % "openstack4j" % "2.0.9"
     )
   )
 
