@@ -28,7 +28,6 @@ import scala.collection.JavaConverters._
 
 class OSMachines(config: Config) extends Machines with Logging {
   class OSConf(config: Config) extends ClusterConf(config) {
-    //val networkIds = config.as[Set[String]]("network-ids").toSeq
     val networkId = config.as[String]("network-id")
     val imageId = config.as[String]("image-id")
 
@@ -69,7 +68,6 @@ class OSMachines(config: Config) extends Machines with Logging {
                               .flavor(flavor)
                               .image(image)
                               .keypairName(clusterConf.keypair)
-                              //.networks(clusterConf.networkIds.toList.asJava)
                               .networks(Seq(clusterConf.networkId).toList.asJava)
                               .build();
       log.info(s"[OpenStack] Creating instance '${name}' ...")
@@ -87,7 +85,6 @@ class OSMachines(config: Config) extends Machines with Logging {
   }
 
   private def getMachine(server: Server) = {
-    // not use first one
     val networkName = os().networking().network().get(clusterConf.networkId).getName()
     val addr = server.getAddresses().getAddresses(networkName).asScala.head.getAddr()
     Machine(server.getId(), server.getName(), addr)
