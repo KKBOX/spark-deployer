@@ -31,8 +31,11 @@ class SparkDeployer(val config: Config) extends Logging {
   private val masterName = clusterConf.clusterName + "-master"
   private val workerPrefix = clusterConf.clusterName + "-worker"
 
-  private val machines =
-      if (clusterConf.platform == "ec2") new EC2Machines(config) else new OSMachines(config)
+  private val machines: Machines = clusterConf.platform match {
+    case "ec2" => new EC2Machines(config)
+    case "openstack" => new OSMachines(config)
+    case _ => sys.error("unsupported platform")
+  }
 
   //helper functions
   def getMasterOpt() = machines.getMachines.find(_.name == masterName)

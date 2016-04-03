@@ -15,6 +15,7 @@
 package sparkdeployer
 
 import Helpers.retry
+import org.openstack4j.core.transport.{Config => OSConfig}
 import org.slf4s.Logging
 import com.typesafe.config._
 import net.ceedubs.ficus.Ficus._
@@ -25,19 +26,21 @@ import org.openstack4j.model.compute._
 
 import scala.collection.JavaConverters._
 
-
 class OSMachines(config: Config) extends Machines with Logging {
   class OSConf(config: Config) extends ClusterConf(config) {
-    val networkId = config.as[String]("network-id")
-    val imageId = config.as[String]("image-id")
+    val endpoint = config.as[String]("endpoint")
+    val tenantId = config.as[String]("tenant-id")
+    val tenantName = config.as[String]("tenant-name")
 
-    val os_cacert = config.as[String]("os-cacert")
-    val os_auth_url = config.as[String]("os-auth-url")
-    val os_tenant_id = config.as[String]("os-tenant-id")
-    val os_tenant_name = config.as[String]("os-tenant-name")
-    val os_username = config.as[String]("os-username")
     private val standardIn = System.console()
-    val os_password = standardIn.readPassword("Please enter password> ").mkString
+    val username = standardIn.readLine("Enter OpenStack username> ")
+    val password = standardIn.readPassword("Enter OpenStack password> ").mkString
+
+    val masterFlavorName = config.as[String]("master.flavor-name")
+    val workerFlavorName = config.as[String]("worker.flavor-name")
+    
+    val imageId = config.as[String]("image-id")
+    val networkId = config.as[String]("network-id")
 
     // TODO: attach extra disk
     //val rootDevice = config.as[Option[String]]("root-device").getOrElse("/dev/xvda")
@@ -45,31 +48,37 @@ class OSMachines(config: Config) extends Machines with Logging {
   implicit val clusterConf = new OSConf(config)
 
   private def os(): OSClient = OSFactory.builder()
-    .endpoint(clusterConf.os_auth_url)
-    .credentials(clusterConf.os_username, clusterConf.os_password)
-    .tenantId(clusterConf.os_tenant_id)
-    .tenantName(clusterConf.os_tenant_name)
-    .useNonStrictSSLClient(true)
+    .endpoint(clusterConf.endpoint)
+    .credentials(clusterConf.username, clusterConf.password)
+    .tenantId(clusterConf.tenantId)
+    .tenantName(clusterConf.tenantName)
+    .withConfig(OSConfig.newConfig().withSSLVerificationDisabled())
     .authenticate()
 
   def createMachines(machineType: MachineType, names: Set[String]): Seq[Machine] = {
     log.info(s"[OpenStack] Creating ${names.size} instances...")
-    names.toSeq.map { name =>
-      val flavor = os().compute().flavors().list().asScala.find(_.getName() == (machineType match {
-        case Master => clusterConf.masterInstanceType
-        case Worker => clusterConf.workerInstanceType
-      })).get
-      val image = os().compute().images().get(clusterConf.imageId)
 
-      val bs = Builders.server()
-      val serverCreate: ServerCreate = clusterConf.securityGroupIds
-                              .map(ids => ids.toSeq.foldLeft(bs) {(bs, id) => bs.addSecurityGroup(id)}).get
-                              .name(name)
-                              .flavor(flavor)
-                              .image(image)
-                              .keypairName(clusterConf.keypair)
-                              .networks(Seq(clusterConf.networkId).toList.asJava)
-                              .build();
+    val flavor = os().compute().flavors().list().asScala.find(_.getName() == (machineType match {
+      case Master => clusterConf.masterFlavorName
+      case Worker => clusterConf.workerFlavorName
+    })).get
+    
+    val image = os().compute().images().get(clusterConf.imageId)
+    assert(image != null)
+
+    names.toSeq.map { name =>
+      val serverCreate = Some(Builders.server())
+        .map { bs =>
+          clusterConf.securityGroupIds.map(_.toSeq).getOrElse(Seq.empty)
+            .foldLeft(bs)((bs, id) => bs.addSecurityGroup(id))
+        }
+        .get
+        .name(name)
+        .flavor(flavor)
+        .image(image)
+        .keypairName(clusterConf.keypair)
+        .networks(Seq(clusterConf.networkId).asJava)
+        .build()
       log.info(s"[OpenStack] Creating instance '${name}' ...")
       val server: Server = os().compute().servers().boot(serverCreate)
       retry { i =>
