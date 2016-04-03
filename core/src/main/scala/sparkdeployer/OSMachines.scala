@@ -28,7 +28,7 @@ import scala.collection.JavaConverters._
 
 class OSMachines(config: Config) extends Machines with Logging {
   class OSConf(config: Config) extends ClusterConf(config) {
-    val endpoint = config.as[String]("endpoint")
+    val authUrl = config.as[String]("auth-url")
     val tenantId = config.as[String]("tenant-id")
     val tenantName = config.as[String]("tenant-name")
 
@@ -48,7 +48,7 @@ class OSMachines(config: Config) extends Machines with Logging {
   implicit val clusterConf = new OSConf(config)
 
   private def os(): OSClient = OSFactory.builder()
-    .endpoint(clusterConf.endpoint)
+    .endpoint(clusterConf.authUrl)
     .credentials(clusterConf.username, clusterConf.password)
     .tenantId(clusterConf.tenantId)
     .tenantName(clusterConf.tenantName)
