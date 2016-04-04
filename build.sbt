@@ -25,7 +25,7 @@ lazy val core = (project in file("core"))
   .settings(commonSettings: _*)
   .settings(
     name := "spark-deployer-core",
-    crossScalaVersions := Seq("2.10.6", "2.11.7"),
+    crossScalaVersions := Seq("2.10.6", "2.11.8"),
     libraryDependencies ++= Seq(
       "org.slf4s" %% "slf4s-api" % "1.7.12",
       "net.ceedubs" %% "ficus" % "[1.0.1,1.1.2]",
