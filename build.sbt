@@ -2,7 +2,7 @@ scalaVersion := "2.10.6"
 
 lazy val commonSettings = Seq(
   organization := "net.pishen",
-  version := "1.3.0",
+  version := "2.0.0",
   scalaVersion := "2.10.6",
   licenses += ("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0.html")),
   homepage := Some(url("https://github.com/pishen/spark-deployer")),
@@ -25,13 +25,14 @@ lazy val core = (project in file("core"))
   .settings(commonSettings: _*)
   .settings(
     name := "spark-deployer-core",
-    crossScalaVersions := Seq("2.10.6", "2.11.7"),
+    crossScalaVersions := Seq("2.10.6", "2.11.8"),
     libraryDependencies ++= Seq(
       "org.slf4s" %% "slf4s-api" % "1.7.12",
       "net.ceedubs" %% "ficus" % "[1.0.1,1.1.2]",
       "com.github.seratch" %% "awscala" % "0.5.5" excludeAll(ExclusionRule(organization = "com.amazonaws")),
       "com.amazonaws" % "aws-java-sdk-s3" % "1.10.34",
-      "com.amazonaws" % "aws-java-sdk-ec2" % "1.10.34"
+      "com.amazonaws" % "aws-java-sdk-ec2" % "1.10.34",
+      "org.pacesys" % "openstack4j" % "2.0.9"
     )
   )
 

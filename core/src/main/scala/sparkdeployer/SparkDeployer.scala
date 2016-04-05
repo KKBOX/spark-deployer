@@ -14,6 +14,7 @@
 
 package sparkdeployer
 
+import com.typesafe.config.{ Config, ConfigFactory }
 import java.io.File
 import java.util.concurrent.ForkJoinPool
 import org.slf4s.Logging
@@ -23,14 +24,18 @@ import scala.concurrent.duration.Duration
 import scala.sys.process.stringSeqToProcess
 import scala.util.{Failure, Success, Try}
 
-class SparkDeployer(val clusterConf: ClusterConf) extends Logging {
-  implicit val iClusterConf = clusterConf
+class SparkDeployer(val config: Config) extends Logging {
+  implicit val clusterConf = new ClusterConf(config)
   implicit val ec = ExecutionContext.fromExecutorService(new ForkJoinPool(clusterConf.threadPoolSize))
 
   private val masterName = clusterConf.clusterName + "-master"
   private val workerPrefix = clusterConf.clusterName + "-worker"
 
-  private val machines = new EC2Machines()
+  private val machines: Machines = clusterConf.platform match {
+    case "ec2" => new EC2Machines(config)
+    case "openstack" => new OSMachines(config)
+    case _ => sys.error("unsupported platform")
+  }
 
   //helper functions
   def getMasterOpt() = machines.getMachines.find(_.name == masterName)
@@ -53,7 +58,7 @@ class SparkDeployer(val clusterConf: ClusterConf) extends Logging {
   private def setupSparkEnv(machine: Machine, masterAddressOpt: Option[String]) = {
     val sparkEnvPath = clusterConf.sparkDirName + "/conf/spark-env.sh"
     val masterAddress = masterAddressOpt.getOrElse(machine.address)
-    val sparkEnvConf = (clusterConf.sparkEnv ++ Seq(s"SPARK_MASTER_IP=${masterAddress}", s"SPARK_PUBLIC_DNS=${machine.address}")).mkString("\\n")
+    val sparkEnvConf = (clusterConf.sparkEnv ++ Seq(s"SPARK_MASTER_IP=${masterAddress}", s"SPARK_PUBLIC_DNS=${machine.address}", s"SPARK_LOCAL_IP=${machine.address}")).mkString("\\n")
     SSH(machine.address)
       .withRemoteCommand(s"echo -e '$sparkEnvConf' > $sparkEnvPath && chmod u+x $sparkEnvPath")
       .withRetry
@@ -261,5 +266,10 @@ class SparkDeployer(val clusterConf: ClusterConf) extends Logging {
         .run
     }
   }
+}
 
+object SparkDeployer {
+  def fromConfig(config: Config) = new SparkDeployer(config)
+  def fromFile(configFile: File) = fromConfig(ConfigFactory.parseFile(configFile).resolve())
+  def fromFile(configPath: String): SparkDeployer = fromFile(new File(configPath))
 }

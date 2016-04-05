@@ -18,7 +18,7 @@ import java.io.File
 
 object Main {
   def main(args: Array[String]) {
-    val sparkDeployer = new SparkDeployer(ClusterConf.fromFile("spark-deployer.conf"))
+    val sparkDeployer = SparkDeployer.fromFile("spark-deployer.conf")
 
     args.head match {
       case "--create-cluster" =>
