@@ -82,6 +82,7 @@ class SparkDeployer(val config: Config) extends Logging {
       .withRetry
       .withRunningMessage(s"[${machine.name}] Add host ip.")
       .withTTY
+      .run
   }
 
   private def withFailover[T](op: => T): T = {
