@@ -32,6 +32,8 @@ class ClusterConf(config: Config) {
   }
 
   val user = config.as[Option[String]]("user").getOrElse("ec2-user")
+  
+  val addHostIp = config.as[Option[Boolean]]("add-host-ip").getOrElse(false)
 
   val driverMemory = config.as[Option[String]]("master.driver-memory")
   val executorMemory = config.as[Option[String]]("worker.executor-memory")
