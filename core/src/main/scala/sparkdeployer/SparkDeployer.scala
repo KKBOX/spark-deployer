@@ -75,6 +75,15 @@ class SparkDeployer(val config: Config) extends Logging {
       .withErrorMessage(s"[${machine.name}] Failed on ${scriptName}.")
       .run
   }
+  
+  private def addHostIp(machine: Machine) = {
+    SSH(machine.address)
+      .withRemoteCommand(s"echo ${machine.address} `hostname` | sudo tee -a /etc/hosts")
+      .withRetry
+      .withRunningMessage(s"[${machine.name}] Add host ip.")
+      .withTTY
+      .run
+  }
 
   private def withFailover[T](op: => T): T = {
     Try { op } match {
@@ -109,6 +118,9 @@ class SparkDeployer(val config: Config) extends Logging {
         .run
     }
     setupSparkEnv(master, None)
+    if(clusterConf.addHostIp) {
+      addHostIp(master)
+    }
     runSparkSbin(master, "start-master.sh")
     log.info(s"[$masterName] Master started.")
   }
@@ -130,6 +142,9 @@ class SparkDeployer(val config: Config) extends Logging {
       Future {
         downloadSpark(worker)
         setupSparkEnv(worker, Some(masterAddress))
+        if(clusterConf.addHostIp){
+          addHostIp(worker)
+        }
         runSparkSbin(worker, "start-slave.sh", Seq(s"spark://$masterAddress:7077"))
         log.info(s"[${worker.name}] Worker started.")
       }.recover {
