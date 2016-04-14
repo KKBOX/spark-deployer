@@ -31,6 +31,7 @@ class ClusterConf(config: Config) {
     pemFile.getAbsolutePath
   }
 
+  val IAMRole = config.as[Option[String]]("IAM-role")
   val user = config.as[Option[String]]("user").getOrElse("ec2-user")
   
   val addHostIp = config.as[Option[Boolean]]("add-host-ip").getOrElse(false)
