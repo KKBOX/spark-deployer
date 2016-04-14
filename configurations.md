@@ -74,6 +74,8 @@ tenant-name = "pishen"
 image-id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 user = "ubuntu"
 
+# add-host-ip = true
+
 master {
   flavor-name = "m1.medium"
   driver-memory = "2G"
@@ -111,6 +113,7 @@ network-id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 
 ## Common settings
 * `user` will be the username used to login the machines.
+* Make `add-host-ip` to `true` if you want to read the input by `sc.textFile()`.
 * `driver-memory` and `executor-memory` are the memory available for Spark, you may subtract 2G from the physically available memory on that machine.
 * Some steps of the deployment (e.g. SSH login) may fail at the first time. In default, spark-deployer will retry 20 times before it throw an exception. You can change the number of retries at `retry-attempts`.
 * `spark-tgz-url` specifies the location of Spark tarball for each machine to download.
