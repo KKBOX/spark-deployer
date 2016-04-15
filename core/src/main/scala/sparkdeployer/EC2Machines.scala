@@ -17,7 +17,7 @@ package sparkdeployer
 import Helpers.retry
 import com.amazonaws.regions.Regions
 import com.amazonaws.services.ec2.AmazonEC2Client
-import com.amazonaws.services.ec2.model.{BlockDeviceMapping, CreateTagsRequest, EbsBlockDevice, RunInstancesRequest, Tag, TerminateInstancesRequest}
+import com.amazonaws.services.ec2.model.{BlockDeviceMapping, CreateTagsRequest, EbsBlockDevice, RunInstancesRequest, Tag, TerminateInstancesRequest, IamInstanceProfileSpecification}
 import com.typesafe.config.Config
 import org.slf4s.Logging
 import scala.collection.JavaConverters._
@@ -79,6 +79,7 @@ class EC2Machines(config: Config) extends Machines with Logging {
             .withMaxCount(number)
             .withMinCount(number)
         }
+        .map(req => clusterConf.iamRole.map(name => req.withIamInstanceProfile(new IamInstanceProfileSpecification().withName(name))).getOrElse(req))
         .map(req => clusterConf.securityGroupIds.map(ids => req.withSecurityGroupIds(ids.asJava)).getOrElse(req))
         .map(req => clusterConf.subnetId.map(id => req.withSubnetId(id)).getOrElse(req))
         .get
