@@ -16,6 +16,8 @@ region = "us-west-2"
 # user = "ubuntu"
 # root-device = "/dev/sda1"
 
+# iam-role = "role_name"
+
 master {
   instance-type = "c4.large"
   disk-size = 8
