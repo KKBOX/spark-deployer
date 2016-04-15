@@ -47,6 +47,7 @@ class EC2Machines(config: Config) extends Machines with Logging {
     val workerInstanceType = config.as[String]("worker.instance-type")
     val workerDiskSize = config.as[Int]("worker.disk-size")
     
+    val iamRole = config.as[Option[String]]("iam-role")
     val subnetId = config.as[Option[String]]("subnet-id")
     val usePrivateIp = config.as[Option[Boolean]]("use-private-ip").getOrElse(false)
   }
