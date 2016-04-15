@@ -61,8 +61,8 @@ class EC2Machines(config: Config) extends Machines with Logging {
       val number = names.size - existMachines.size
 
       val req = Some(new RunInstancesRequest())
-         .map { instance =>
-           instance.withBlockDeviceMappings(new BlockDeviceMapping()
+        .map {
+          _.withBlockDeviceMappings(new BlockDeviceMapping()
             .withDeviceName(clusterConf.rootDevice)
             .withEbs(new EbsBlockDevice()
               .withVolumeSize(machineType match {
@@ -78,11 +78,8 @@ class EC2Machines(config: Config) extends Machines with Logging {
             .withKeyName(clusterConf.keypair)
             .withMaxCount(number)
             .withMinCount(number)
-           clusterConf.IAMRole.map(name =>
-           instance.withIamInstanceProfile(new IamInstanceProfileSpecification().withName(name)))
-
-           instance
         }
+        .map(req => clusterConf.iamRole.map(name => req.withIamInstanceProfile(new IamInstanceProfileSpecification().withName(name))).getOrElse(req))
         .map(req => clusterConf.securityGroupIds.map(ids => req.withSecurityGroupIds(ids.asJava)).getOrElse(req))
         .map(req => clusterConf.subnetId.map(id => req.withSubnetId(id)).getOrElse(req))
         .get
