@@ -56,6 +56,9 @@ case class SSH(
 
   def run(): Int = {
     val op = (attempts: Int) => {
+      if (clusterConf.pem.isEmpty) {
+        log.warn("[SSH] ssh without pem.")
+      }
       log.info("[SSH] " + runningMessage.getOrElse("ssh") + s" Attempts: $attempts. Command: " + fullCommandSeq(true).mkString(" "))
       val exitValue = fullCommandSeq(false).!
       if (exitValue != 0) {
