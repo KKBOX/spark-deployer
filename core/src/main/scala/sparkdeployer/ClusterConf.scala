@@ -25,14 +25,14 @@ class ClusterConf(config: Config) {
   val clusterName = config.as[String]("cluster-name")
 
   val keypair = config.as[String]("keypair")
-  val pem = {
-    val pemFile = new File(config.as[String]("pem"))
+  val pem = config.as[Option[String]]("pem").map { path =>
+    val pemFile = new File(path)
     require(pemFile.exists(), "I can't find your pem file at " + pemFile.getAbsolutePath)
     pemFile.getAbsolutePath
   }
 
   val user = config.as[Option[String]]("user").getOrElse("ec2-user")
-  
+
   val addHostIp = config.as[Option[Boolean]]("add-host-ip").getOrElse(false)
 
   val driverMemory = config.as[Option[String]]("master.driver-memory")
@@ -52,10 +52,10 @@ class ClusterConf(config: Config) {
 
   val securityGroupIds = config.as[Option[Set[String]]]("security-group-ids")
   val sparkEnv = config.as[Option[Seq[String]]]("spark-env").getOrElse(Seq.empty)
-  
+
   val destroyOnFail = config.as[Option[Boolean]]("destroy-on-fail").getOrElse(false)
-  
+
   val threadPoolSize = config.as[Option[Int]]("thread-pool-size").getOrElse(100)
-  
+
   val enableS3A = config.as[Option[Boolean]]("enable-s3a").getOrElse(false)
 }

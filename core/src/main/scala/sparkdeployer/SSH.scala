@@ -36,10 +36,10 @@ case class SSH(
 
   private def fullCommandSeq(maskAWS: Boolean) = Seq(
     "ssh",
-    "-i", clusterConf.pem,
     "-o", "UserKnownHostsFile=/dev/null",
     "-o", "StrictHostKeyChecking=no"
   )
+    .++(clusterConf.pem.map(pem => Seq("-i", pem)).getOrElse(Seq.empty))
     .++(if (ttyAllocated) Some("-tt") else None)
     .:+(clusterConf.user + "@" + address)
     .++(remoteCommand.map { remoteCommand =>
