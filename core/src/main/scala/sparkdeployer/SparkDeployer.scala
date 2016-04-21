@@ -15,6 +15,7 @@
 package sparkdeployer
 
 import com.typesafe.config.{Config, ConfigFactory}
+import net.ceedubs.ficus.Ficus._
 import java.io.File
 import java.util.concurrent.ForkJoinPool
 import org.slf4s.Logging
@@ -288,7 +289,11 @@ class SparkDeployer(val config: Config) extends Logging {
 }
 
 object SparkDeployer {
-  def fromConfig(config: Config) = new SparkDeployer(config)
+  def fromConfig(config: Config) = {
+    config.as[Option[String]]("root-config").map {
+      rootConfig => new SparkDeployer(config.as[Config](rootConfig))
+    }.getOrElse(new SparkDeployer(config))
+  }
   def fromFile(configFile: File) = fromConfig(ConfigFactory.parseFile(configFile).resolve())
   def fromFile(configPath: String): SparkDeployer = fromFile(new File(configPath))
 }
