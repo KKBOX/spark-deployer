@@ -8,7 +8,7 @@ platform = "ec2"
 cluster-name = "pishen-spark"
 
 keypair = "pishen"
-pem = "/home/pishen/.ssh/pishen.pem"
+# pem = "/home/pishen/.ssh/pishen.pem"
 
 region = "us-west-2"
 
@@ -67,7 +67,7 @@ platform = "openstack"
 cluster-name = "pishen-spark"
 
 keypair = "pishen"
-pem = "/home/pishen/.ssh/pishen.pem"
+# pem = "/home/pishen/.ssh/pishen.pem"
 
 auth-url = "http://127.0.0.1:5000/v2.0"
 tenant-id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
