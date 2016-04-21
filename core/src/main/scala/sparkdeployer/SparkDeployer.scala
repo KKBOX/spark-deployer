@@ -14,7 +14,7 @@
 
 package sparkdeployer
 
-import com.typesafe.config.{ Config, ConfigFactory }
+import com.typesafe.config.{Config, ConfigFactory}
 import java.io.File
 import java.util.concurrent.ForkJoinPool
 import org.slf4s.Logging
@@ -75,7 +75,7 @@ class SparkDeployer(val config: Config) extends Logging {
       .withErrorMessage(s"[${machine.name}] Failed on ${scriptName}.")
       .run
   }
-  
+
   private def addHostIp(machine: Machine) = {
     SSH(machine.address)
       .withRemoteCommand(s"echo ${machine.address} `hostname` | sudo tee -a /etc/hosts")
@@ -118,7 +118,7 @@ class SparkDeployer(val config: Config) extends Logging {
         .run
     }
     setupSparkEnv(master, None)
-    if(clusterConf.addHostIp) {
+    if (clusterConf.addHostIp) {
       addHostIp(master)
     }
     runSparkSbin(master, "start-master.sh")
@@ -142,7 +142,7 @@ class SparkDeployer(val config: Config) extends Logging {
       Future {
         downloadSpark(worker)
         setupSparkEnv(worker, Some(masterAddress))
-        if(clusterConf.addHostIp){
+        if (clusterConf.addHostIp) {
           addHostIp(worker)
         }
         runSparkSbin(worker, "start-slave.sh", Seq(s"spark://$masterAddress:7077"))
@@ -228,9 +228,13 @@ class SparkDeployer(val config: Config) extends Logging {
       case Some(master) =>
         val masterAddress = master.address
 
-        val sshCmd = Seq("ssh", "-i", clusterConf.pem,
-          "-o", "UserKnownHostsFile=/dev/null",
-          "-o", "StrictHostKeyChecking=no").mkString(" ")
+        val sshCmd = Seq("ssh")
+          .++(clusterConf.pem.map(f => Seq("-i", f)).getOrElse(Seq.empty))
+          .++(Seq(
+            "-o", "UserKnownHostsFile=/dev/null",
+            "-o", "StrictHostKeyChecking=no"
+          ))
+          .mkString(" ")
 
         val uploadJarCmd = Seq(
           "rsync",

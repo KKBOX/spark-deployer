@@ -36,10 +36,10 @@ case class SSH(
 
   private def fullCommandSeq(maskAWS: Boolean) = Seq(
     "ssh",
-    "-i", clusterConf.pem,
     "-o", "UserKnownHostsFile=/dev/null",
     "-o", "StrictHostKeyChecking=no"
   )
+    .++(clusterConf.pem.map(pem => Seq("-i", pem)).getOrElse(Seq.empty))
     .++(if (ttyAllocated) Some("-tt") else None)
     .:+(clusterConf.user + "@" + address)
     .++(remoteCommand.map { remoteCommand =>
@@ -56,6 +56,9 @@ case class SSH(
 
   def run(): Int = {
     val op = (attempts: Int) => {
+      if (clusterConf.pem.isEmpty) {
+        log.warn("[SSH] ssh without pem.")
+      }
       log.info("[SSH] " + runningMessage.getOrElse("ssh") + s" Attempts: $attempts. Command: " + fullCommandSeq(true).mkString(" "))
       val exitValue = fullCommandSeq(false).!
       if (exitValue != 0) {
