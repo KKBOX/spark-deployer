@@ -290,8 +290,8 @@ class SparkDeployer(val config: Config) extends Logging {
 
 object SparkDeployer {
   def fromConfig(config: Config) = {
-    config.as[Option[String]]("root-config").map {
-      rootConfig => new SparkDeployer(config.as[Config](rootConfig))
+    config.as[Option[String]]("target-config").map {
+      targetConfig => new SparkDeployer(config.as[Config](targetConfig))
     }.getOrElse(new SparkDeployer(config))
   }
   def fromFile(configFile: File) = fromConfig(ConfigFactory.parseFile(configFile).resolve())
