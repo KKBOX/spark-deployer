@@ -18,8 +18,9 @@ import java.io.File
 
 import com.typesafe.config.Config
 import net.ceedubs.ficus.Ficus._
+import org.slf4s.Logging
 
-class ClusterConf(config: Config) {
+class ClusterConf(config: Config) extends Logging {
   val platform = config.as[Option[String]]("platform").getOrElse("ec2")
 
   val clusterName = config.as[String]("cluster-name")
@@ -29,6 +30,9 @@ class ClusterConf(config: Config) {
     val pemFile = new File(path)
     require(pemFile.exists(), "I can't find your pem file at " + pemFile.getAbsolutePath)
     pemFile.getAbsolutePath
+  }
+  if (pem.isEmpty) {
+    log.warn("No pem found, please make sure you have the right private key in your ssh.")
   }
 
   val user = config.as[Option[String]]("user").getOrElse("ec2-user")
