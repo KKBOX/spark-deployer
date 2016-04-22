@@ -29,15 +29,16 @@ class EC2Machines(config: Config) extends Machines with Logging {
     val region = config.as[String]("region")
     val ami = config.as[Option[String]]("ami").getOrElse {
       region match {
-        case "us-east-1" => "ami-e3106686"
-        case "us-west-2" => "ami-9ff7e8af"
-        case "us-west-1" => "ami-cd3aff89"
-        case "eu-west-1" => "ami-69b9941e"
-        case "eu-central-1" => "ami-daaeaec7"
-        case "ap-southeast-1" => "ami-52978200"
-        case "ap-southeast-2" => "ami-c11856fb"
-        case "ap-northeast-1" => "ami-9a2fb89a"
-        case "sa-east-1" => "ami-3b0c9926"
+        case "us-east-1" => "ami-08111162"
+        case "us-west-2" => "ami-c229c0a2"
+        case "us-west-1" => "ami-1b0f7d7b"
+        case "eu-west-1" => "ami-31328842"
+        case "eu-central-1" => "ami-e2df388d"
+        case "ap-southeast-1" => "ami-e90dc68a"
+        case "ap-northeast-2" => "ami-6598510b"
+        case "ap-northeast-1" => "ami-f80e0596"
+        case "ap-southeast-2" => "ami-f2210191"
+        case "sa-east-1" => "ami-1e159872"
       }
     }
     val rootDevice = config.as[Option[String]]("root-device").getOrElse("/dev/xvda")

@@ -31,9 +31,6 @@ class ClusterConf(config: Config) extends Logging {
     require(pemFile.exists(), "I can't find your pem file at " + pemFile.getAbsolutePath)
     pemFile.getAbsolutePath
   }
-  if (pem.isEmpty) {
-    log.warn("No pem found, please make sure you have the right private key in your ssh.")
-  }
 
   val user = config.as[Option[String]]("user").getOrElse("ec2-user")
 
@@ -63,5 +60,5 @@ class ClusterConf(config: Config) extends Logging {
 
   val enableS3A = config.as[Option[Boolean]]("enable-s3a").getOrElse(false)
   
-  val installJava = config.as[Option[Boolean]]("install-java").getOrElse(false)
+  val startupScript = config.as[Option[String]]("startup-script")
 }

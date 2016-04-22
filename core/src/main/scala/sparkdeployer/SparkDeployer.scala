@@ -86,12 +86,14 @@ class SparkDeployer(val config: Config) extends Logging {
       .run
   }
   
-  private def installJava(machine: Machine) = {
-    SSH(machine.address)
-      .withRemoteCommand(s"sudo apt-get -qq install openjdk-8-jdk")
-      .withRunningMessage(s"[${machine.name}] Install Java 8.")
-      .withTTY
-      .run
+  private def runStartupScript(machine: Machine) = {
+    clusterConf.startupScript.foreach{ script =>
+      SSH(machine.address)
+        .withRemoteCommand(script)
+        .withRunningMessage(s"[${machine.name}] Running startup script.")
+        .withTTY
+        .run
+    }
   }
 
   private def withFailover[T](op: => T): T = {
@@ -130,9 +132,7 @@ class SparkDeployer(val config: Config) extends Logging {
     if (clusterConf.addHostIp) {
       addHostIp(master)
     }
-    if (clusterConf.installJava) {
-      installJava(master)
-    }
+    runStartupScript(master)
     runSparkSbin(master, "start-master.sh")
     log.info(s"[$masterName] Master started.")
   }
@@ -157,9 +157,7 @@ class SparkDeployer(val config: Config) extends Logging {
         if (clusterConf.addHostIp) {
           addHostIp(worker)
         }
-        if (clusterConf.installJava) {
-          installJava(worker)
-        }
+        runStartupScript(worker)
         runSparkSbin(worker, "start-slave.sh", Seq(s"spark://$masterAddress:7077"))
         log.info(s"[${worker.name}] Worker started.")
       }.recover {
