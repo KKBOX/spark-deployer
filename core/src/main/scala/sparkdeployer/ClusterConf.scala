@@ -20,7 +20,7 @@ import com.typesafe.config.Config
 import net.ceedubs.ficus.Ficus._
 import org.slf4s.Logging
 
-class ClusterConf(config: Config) extends Logging {
+class ClusterConf(config: Config) {
   val platform = config.as[Option[String]]("platform").getOrElse("ec2")
 
   val clusterName = config.as[String]("cluster-name")
