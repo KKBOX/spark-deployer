@@ -53,6 +53,8 @@ main-class = "mypackage.Main"
 # thread-pool-size = 100
 
 # enable-s3a = true
+
+# startup-script = "sudo apt-get -y install openjdk-8-jre &> logfile"
 ```
 * Please see [here](#common-settings) for the common settings.
 * `ami` should be HVM EBS-Backed with Java 7+ installed.
@@ -110,6 +112,8 @@ network-id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 # thread-pool-size = 100
 
 # enable-s3a = true
+
+# startup-script = "sudo apt-get -y install openjdk-8-jre &> logfile"
 ```
 * Please see [here](#common-settings) for the common settings.
 
@@ -131,6 +135,7 @@ network-id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 * `spark-env` adds the additional Spark settings to `conf/spark-env.sh` on each node. Note that `SPARK_MASTER_IP`, `SPARK_MASTER_PORT`, `SPARK_PUBLIC_DNS`, and `SPARK_LOCAL_IP` are hard-coded for now.
 * `destroy-on-fail`: if set to `true`, destroy the cluster when spark-deployer met an error in `sparkCreateCluster` or `sparkSubmitJob`. Note that you still need to destroy the cluster by yourself if no error happens.
 * `enable-s3a`: if set to `true`, add the support for s3a (require hadoop 2.0+). We use the workaround as described [here](http://deploymentzone.com/2015/12/20/s3a-on-spark-on-aws-ec2/).
+* `startup-script`: a script that will be executed before starting Spark master/slave.
 
 ## Config forwarding
 You can use `target-config` to specify the key which contains all your configuration, this is useful when you have different configuration settings for different jobs, while they all share some common settings. For example:
