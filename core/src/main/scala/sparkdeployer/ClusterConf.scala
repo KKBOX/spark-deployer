@@ -58,4 +58,6 @@ class ClusterConf(config: Config) {
   val threadPoolSize = config.as[Option[Int]]("thread-pool-size").getOrElse(100)
 
   val enableS3A = config.as[Option[Boolean]]("enable-s3a").getOrElse(false)
+  
+  val installJava = config.as[Option[Boolean]]("install-java").getOrElse(false)
 }
