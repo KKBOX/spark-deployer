@@ -17,7 +17,7 @@ package sparkdeployer
 import Helpers.retry
 import com.amazonaws.regions.Regions
 import com.amazonaws.services.ec2.AmazonEC2Client
-import com.amazonaws.services.ec2.model.{BlockDeviceMapping, CreateTagsRequest, EbsBlockDevice, RunInstancesRequest, Tag, TerminateInstancesRequest, IamInstanceProfileSpecification}
+import com.amazonaws.services.ec2.model.{ BlockDeviceMapping, CancelSpotInstanceRequestsRequest, CreateTagsRequest, DescribeSpotInstanceRequestsRequest, EbsBlockDevice, GroupIdentifier, IamInstanceProfileSpecification, LaunchSpecification, RequestSpotInstancesRequest, RunInstancesRequest, Tag, TerminateInstancesRequest }
 import com.typesafe.config.Config
 import org.slf4s.Logging
 import scala.collection.JavaConverters._
@@ -42,36 +42,98 @@ class EC2Machines(config: Config) extends Machines with Logging {
       }
     }
     val rootDevice = config.as[Option[String]]("root-device").getOrElse("/dev/xvda")
-    
+
     val masterInstanceType = config.as[String]("master.instance-type")
     val masterDiskSize = config.as[Int]("master.disk-size")
+    val masterSpotPrice = config.as[Option[String]]("master.spot-price")
     val workerInstanceType = config.as[String]("worker.instance-type")
     val workerDiskSize = config.as[Int]("worker.disk-size")
-    
+    val workerSpotPrice = config.as[Option[String]]("worker.spot-price")
+
     val iamRole = config.as[Option[String]]("iam-role")
     val subnetId = config.as[Option[String]]("subnet-id")
     val usePrivateIp = config.as[Option[Boolean]]("use-private-ip").getOrElse(false)
   }
   implicit val clusterConf = new EC2Conf(config)
-  
+
   private val ec2 = new AmazonEC2Client().withRegion[AmazonEC2Client](Regions.fromName(clusterConf.region))
 
   def createMachines(machineType: MachineType, names: Set[String]) = {
-    //refill the number of machines with retry to workaround AWS's bug.
-    @annotation.tailrec
-    def fill(existMachines: Seq[Machine], attempts: Int): Seq[Machine] = {
-      val number = names.size - existMachines.size
+    val blockDeviceMapping = new BlockDeviceMapping()
+      .withDeviceName(clusterConf.rootDevice)
+      .withEbs {
+        new EbsBlockDevice()
+          .withVolumeSize(machineType match {
+            case Master => clusterConf.masterDiskSize
+            case Worker => clusterConf.workerDiskSize
+          })
+          .withVolumeType("gp2")
+      }
 
+    def requestSpotInstances(number: Int, price: String) = {
+      val req = new RequestSpotInstancesRequest()
+        .withSpotPrice(price)
+        .withInstanceCount(number)
+        .withLaunchSpecification {
+          Some(new LaunchSpecification())
+            .map {
+              _.withBlockDeviceMappings(blockDeviceMapping)
+                .withImageId(clusterConf.ami)
+                .withInstanceType(machineType match {
+                  case Master => clusterConf.masterInstanceType
+                  case Worker => clusterConf.workerInstanceType
+                })
+                .withKeyName(clusterConf.keypair)
+            }
+            .map { req =>
+              clusterConf.iamRole.map(name => req.withIamInstanceProfile(new IamInstanceProfileSpecification().withName(name))).getOrElse(req)
+            }
+            .map { req =>
+              clusterConf.securityGroupIds.map(ids => req.withAllSecurityGroups(ids.map(id => new GroupIdentifier().withGroupId(id)).asJava)).getOrElse(req)
+            }
+            .map(req => clusterConf.subnetId.map(id => req.withSubnetId(id)).getOrElse(req))
+            .get
+        }
+
+      val requests = ec2.requestSpotInstances(req).getSpotInstanceRequests.asScala.map(_.getSpotInstanceRequestId)
+
+      val instanceIds = try {
+        retry { i =>
+          log.info(s"[EC2] Getting instance ids from spot requests. Attempts: $i.")
+          val reqreq = new DescribeSpotInstanceRequestsRequest().withSpotInstanceRequestIds(requests.asJava)
+          ec2.describeSpotInstanceRequests(reqreq).getSpotInstanceRequests.asScala.toSeq
+            .map { req =>
+              req.getState match {
+                case "open" => sys.error("Spot request still open.")
+                case "active" =>
+                  val id = req.getInstanceId
+                  assert(id != null && id != "")
+                  id
+                case _ => sys.error("Unhandled spot request state.")
+              }
+            }
+            .toSet
+        }
+      } catch {
+        case e: Throwable =>
+          log.error(s"[EC2] Spot instance creation timeout. Canceling...")
+          
+          ec2.cancelSpotInstanceRequests(new CancelSpotInstanceRequestsRequest().withSpotInstanceRequestIds(requests.asJava))
+          
+          val reqreq = new DescribeSpotInstanceRequestsRequest().withSpotInstanceRequestIds(requests.asJava)
+          val reqs = ec2.describeSpotInstanceRequests(reqreq).getSpotInstanceRequests.asScala.toSeq
+          destroyMachines(reqs.map(_.getInstanceId).filter(id => id != null && id != "").toSet)
+          
+          throw e
+      }
+
+      getNonTerminatedInstances().filter(instanceIds contains _.getInstanceId)
+    }
+
+    def requestOnDemandInstances(number: Int) = {
       val req = Some(new RunInstancesRequest())
         .map {
-          _.withBlockDeviceMappings(new BlockDeviceMapping()
-            .withDeviceName(clusterConf.rootDevice)
-            .withEbs(new EbsBlockDevice()
-              .withVolumeSize(machineType match {
-                case Master => clusterConf.masterDiskSize
-                case Worker => clusterConf.workerDiskSize
-              })
-              .withVolumeType("gp2")))
+          _.withBlockDeviceMappings(blockDeviceMapping)
             .withImageId(clusterConf.ami)
             .withInstanceType(machineType match {
               case Master => clusterConf.masterInstanceType
@@ -81,13 +143,31 @@ class EC2Machines(config: Config) extends Machines with Logging {
             .withMaxCount(number)
             .withMinCount(number)
         }
-        .map(req => clusterConf.iamRole.map(name => req.withIamInstanceProfile(new IamInstanceProfileSpecification().withName(name))).getOrElse(req))
+        .map { req =>
+          clusterConf.iamRole.map(name => req.withIamInstanceProfile(new IamInstanceProfileSpecification().withName(name))).getOrElse(req)
+        }
         .map(req => clusterConf.securityGroupIds.map(ids => req.withSecurityGroupIds(ids.asJava)).getOrElse(req))
         .map(req => clusterConf.subnetId.map(id => req.withSubnetId(id)).getOrElse(req))
         .get
 
+      ec2.runInstances(req).getReservation.getInstances.asScala.toSeq
+    }
+
+    //refill the number of machines with retry to workaround AWS's bug.
+    @annotation.tailrec
+    def fill(existMachines: Seq[Machine], attempts: Int): Seq[Machine] = {
+      val number = names.size - existMachines.size
+
+      val spotPriceOpt = machineType match {
+        case Master => clusterConf.masterSpotPrice
+        case Worker => clusterConf.workerSpotPrice
+      }
+
       log.info(s"[EC2] Creating $number instances...")
-      val instances = ec2.runInstances(req).getReservation.getInstances.asScala.toSeq
+      val instances = spotPriceOpt match {
+        case Some(price) => requestSpotInstances(number, price)
+        case None => requestOnDemandInstances(number)
+      }
 
       val results: Seq[Either[Machine, String]] = instances.zip(names -- existMachines.map(_.name)).map {
         case (instance, name) =>

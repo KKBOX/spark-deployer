@@ -22,12 +22,14 @@ master {
   instance-type = "c4.large"
   disk-size = 8
   driver-memory = "2G"
+  # spot-price = "0.105"
 }
 
 worker {
   instance-type = "c4.xlarge"
   disk-size = 40
   executor-memory = "6G"
+  # spot-price = "0.209"
 }
 
 # retry-attempts = 20
@@ -61,6 +63,7 @@ main-class = "mypackage.Main"
 * `root-device` will be your root volume's name that can be enlarged by `disk-size` in `master` and `worker` settings.
 * Currently tested `instance-type`s are `t2.medium`, `m3.medium`, and `c4.xlarge`. All the M3, M4, C3, and C4 types should work, please report an issue if you encountered a problem.
 * `disk-size` is in GB, which should be at least 8. It resets the size of root partition, which is used by both OS and Spark.
+* If `spot-price` is provided, will try to create spot instance with this price as the bid.
 
 ## OpenStack example
 ```
