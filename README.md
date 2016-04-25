@@ -22,7 +22,7 @@ project-root
 ```
 * Write one line in `project/plugins.sbt`:
 ```
-addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "2.4.0")
+addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "2.5.0")
 ```
 * Write your cluster configuration in `spark-deployer.conf` (See the [examples](configurations.md) for more details). If you want to use another configuration file name, please set the environment variable `SPARK_DEPLOYER_CONF` when starting sbt (e.g. `$ SPARK_DEPLOYER_CONF=./my-spark-deployer.conf sbt`).
 * Write your Spark project's `build.sbt` (Here we give a simple example):
@@ -77,7 +77,7 @@ object Main {
 ## Embedded mode
 If you don't want to use sbt, or if you would like to trigger the cluster creation from within your Scala application, you can include the library of spark-deployer directly:
 ```
-libraryDependencies += "net.pishen" %% "spark-deployer-core" % "2.4.0"
+libraryDependencies += "net.pishen" %% "spark-deployer-core" % "2.5.0"
 ```
 Then, from your Scala code, you can do something like this:
 ```scala
