@@ -47,6 +47,7 @@ object SparkDeployerPlugin extends AutoPlugin {
 
     lazy val sparkUploadJar = taskKey[Unit]("Upload job jar to master.")
     lazy val sparkSubmitJob = inputKey[Unit]("Upload and run the job directly.")
+    lazy val sparkSubmitJobWithMain = inputKey[Unit]("Upload and run the job directly, with main class specified.")
 
     lazy val sparkRemoveS3Dir = inputKey[Unit]("Remove the s3 directory include _$folder$ postfix file.")
     lazy val sparkRestartCluster = taskKey[Unit]("Restart spark master/worker with new environment variables.")
@@ -113,6 +114,13 @@ object SparkDeployerPlugin extends AutoPlugin {
     sparkSubmitJob := {
       StaticLoggerBinder.sbtLogger = streams.value.log
       sparkDeployer.submitJob(assembly.value, spaceDelimited().parsed)
+    },
+    sparkSubmitJobWithMain := {
+      StaticLoggerBinder.sbtLogger = streams.value.log
+      val args = spaceDelimited().parsed
+      require(args.size > 0, "Usage: sparkSubmitJobWithMain MainClass <args>")
+      val mainClass = args.head
+      sparkDeployer.submitJob(assembly.value, args.tail, mainClass)
     },
 
     sparkRemoveS3Dir := {
