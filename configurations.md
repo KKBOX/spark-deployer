@@ -36,7 +36,7 @@ worker {
 
 spark-tgz-url = "http://d3kbcqa49mib13.cloudfront.net/spark-1.6.0-bin-hadoop2.4.tgz"
 
-main-class = "mypackage.Main"
+# main-class = "mypackage.Main"
 
 # app-name = "my-app-name"
 
@@ -97,7 +97,7 @@ worker {
 
 spark-tgz-url = "http://d3kbcqa49mib13.cloudfront.net/spark-1.6.0-bin-hadoop2.4.tgz"
 
-main-class = "mypackage.Main"
+# main-class = "mypackage.Main"
 
 # app-name = "my-app-name"
 

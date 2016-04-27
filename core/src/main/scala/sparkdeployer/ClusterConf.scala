@@ -48,7 +48,7 @@ class ClusterConf(config: Config) {
   }
   val sparkDirName = sparkTgzName.dropRight(4)
 
-  val mainClass = config.as[String]("main-class")
+  val mainClass = config.as[Option[String]]("main-class")
   val appName = config.as[Option[String]]("app-name")
 
   val securityGroupIds = config.as[Option[Set[String]]]("security-group-ids")

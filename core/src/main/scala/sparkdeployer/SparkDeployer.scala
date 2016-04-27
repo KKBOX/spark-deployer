@@ -265,18 +265,18 @@ class SparkDeployer(val config: Config) extends Logging {
     }
   }
 
-  def submitJob(jar: File, args: Seq[String]) = withFailover {
+  def submitJob(jar: File, args: Seq[String], mainClass: String = null) = withFailover {
     uploadJar(jar)
 
     log.warn("You're submitting job directly, please make sure you have a stable network connection.")
     getMasterOpt().foreach { master =>
       val masterAddress = master.address
-
+      
       val submitJobCmd = Seq(
         s"./${clusterConf.sparkDirName}/bin/spark-submit",
-        "--class", clusterConf.mainClass,
         "--master", s"spark://$masterAddress:7077"
       )
+        .++(Option(mainClass).orElse(clusterConf.mainClass).toSeq.flatMap(c => Seq("--class", c)))
         .++(clusterConf.appName.toSeq.flatMap(n => Seq("--name", n)))
         .++(clusterConf.driverMemory.toSeq.flatMap(m => Seq("--driver-memory", m)))
         .++(clusterConf.executorMemory.toSeq.flatMap(m => Seq("--executor-memory", m)))
