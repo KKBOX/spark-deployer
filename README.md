@@ -22,7 +22,7 @@ project-root
 ```
 * Write one line in `project/plugins.sbt`:
 ```
-addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "2.6.0")
+addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "2.7.0")
 ```
 * Write your cluster configuration in `spark-deployer.conf` (See the [examples](configurations.md) for more details). If you want to use another configuration file name, please set the environment variable `SPARK_DEPLOYER_CONF` when starting sbt (e.g. `$ SPARK_DEPLOYER_CONF=./my-spark-deployer.conf sbt`).
 * Write your Spark project's `build.sbt` (Here we give a simple example):
@@ -71,14 +71,17 @@ object Main {
 * `sparkRestartCluster` restart the cluster with new settings from `spark-env` without recreating the machines.
 * `sparkShowMachines` shows the machine addresses with commands to login master and execute spark-shell on it.
 * `sparkUploadJar` uploads the job's jar file to master node.
-* `sparkSubmitJob` uploads and runs the job.
+* `sparkSubmitJob <arg0> <arg1> ...` uploads and runs the job.
 * `sparkSubmitJobWithMain` uploads and runs the job (with main class provided, e.g. `sparkSubmitJobWithMain mypackage.Main <args>`).
 * `sparkRemoveS3Dir <dir-name>` remove the s3 directory with the `_$folder$` folder file (e.g. `sparkRemoveS3Dir s3://bucket_name/middle_folder/target_folder`).
+
+### Execute Spark locally
+Besides running your job with `sparkCreateCluster` and `sparkSubmitJob`, you can also test your job locally (e.g. on your laptop) without creating any machine. Just type `run` or `runMain` in your sbt, spark-deployer will set the master url and app name for your `SparkContext`. You don't have to download the Spark tarball or assemble the project into jar file.
 
 ## Embedded mode
 If you don't want to use sbt, or if you would like to trigger the cluster creation from within your Scala application, you can include the library of spark-deployer directly:
 ```
-libraryDependencies += "net.pishen" %% "spark-deployer-core" % "2.6.0"
+libraryDependencies += "net.pishen" %% "spark-deployer-core" % "2.7.0"
 ```
 Then, from your Scala code, you can do something like this:
 ```scala
