@@ -25,10 +25,9 @@ import org.slf4j.impl.StaticLoggerBinder
 import sbt.AutoPlugin
 import sbt.Def.macroValueIT
 import sbt.Def.spaceDelimited
-import sbt.inputKey
-import sbt.parserToInput
-import sbt.taskKey
-import sbt.Keys.streams
+import sbt._
+import sbt.Keys._
+import sbt.plugins.JvmPlugin
 import sbtassembly.AssemblyKeys.assembly
 
 object SparkDeployerPlugin extends AutoPlugin {
@@ -54,12 +53,19 @@ object SparkDeployerPlugin extends AutoPlugin {
   }
   import autoImport._
   override def trigger = allRequirements
+  override def requires = JvmPlugin
   
   lazy val sparkDeployer = {
     SparkDeployer.fromFile(sys.env.get("SPARK_DEPLOYER_CONF").getOrElse("spark-deployer.conf"))
   }
   
   override lazy val projectSettings = Seq(
+    run in Compile <<= Defaults.runTask(fullClasspath in Compile, mainClass in (Compile, run), runner in (Compile, run)),
+    runMain in Compile <<= Defaults.runTask(fullClasspath in Compile, mainClass in (Compile, run), runner in (Compile, run)),
+    fork := true,
+    javaOptions := Seq("-Dspark.master=local[*]", s"-Dspark.app.name=${sparkDeployer.clusterConf.appName}"),
+    outputStrategy := Some(StdoutOutput),
+    
     sparkDeployerConf := sparkDeployer.config,
 
     sparkCreateMaster := {
