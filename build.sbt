@@ -2,7 +2,7 @@ scalaVersion := "2.10.6"
 
 lazy val commonSettings = Seq(
   organization := "net.pishen",
-  version := "2.7.0",
+  version := "2.7.1-SNAPSHOT",
   scalaVersion := "2.10.6",
   licenses += ("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0.html")),
   homepage := Some(url("https://github.com/pishen/spark-deployer")),
@@ -43,7 +43,7 @@ lazy val plugin = (project in file("plugin"))
     name := "spark-deployer-sbt",
     addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.14.0"),
     publishMavenStyle := false,
-    libraryDependencies += "com.github.eirslett" %% "sbt-slf4j" % "0.1"
+    libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.1.7"
   )
   .dependsOn(core)
 
