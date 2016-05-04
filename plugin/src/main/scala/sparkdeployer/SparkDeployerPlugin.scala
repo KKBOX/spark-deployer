@@ -28,7 +28,8 @@ import sbt.Def.spaceDelimited
 import sbt._
 import sbt.Keys._
 import sbt.plugins.JvmPlugin
-import sbtassembly.AssemblyKeys.assembly
+import sbtassembly.AssemblyKeys._
+import sbtassembly.AssemblyPlugin
 
 object SparkDeployerPlugin extends AutoPlugin {
 
@@ -53,7 +54,7 @@ object SparkDeployerPlugin extends AutoPlugin {
   }
   import autoImport._
   override def trigger = allRequirements
-  override def requires = JvmPlugin
+  override def requires = AssemblyPlugin
   
   lazy val sparkDeployer = {
     SparkDeployer.fromFile(sys.env.get("SPARK_DEPLOYER_CONF").getOrElse("spark-deployer.conf"))
@@ -69,11 +70,9 @@ object SparkDeployerPlugin extends AutoPlugin {
     sparkDeployerConf := sparkDeployer.config,
 
     sparkCreateMaster := {
-      StaticLoggerBinder.sbtLogger = streams.value.log
       sparkDeployer.createMaster()
     },
     sparkAddWorkers := {
-      StaticLoggerBinder.sbtLogger = streams.value.log
       val args = spaceDelimited().parsed
       require(args.length == 1, "Usage: sparkAddWorkers <num-of-workers>")
 
@@ -83,7 +82,6 @@ object SparkDeployerPlugin extends AutoPlugin {
       sparkDeployer.addWorkers(numOfWorkers)
     },
     sparkCreateCluster := {
-      StaticLoggerBinder.sbtLogger = streams.value.log
       val args = spaceDelimited().parsed
       require(args.length == 1, "Usage: sparkCreateCluster <num-of-workers>")
 
@@ -94,7 +92,6 @@ object SparkDeployerPlugin extends AutoPlugin {
     },
 
     sparkRemoveWorkers := {
-      StaticLoggerBinder.sbtLogger = streams.value.log
       val args = spaceDelimited().parsed
       require(args.length == 1, "Usage: sparkRemoveWorkers <num-of-workers>")
 
@@ -104,25 +101,20 @@ object SparkDeployerPlugin extends AutoPlugin {
       sparkDeployer.removeWorkers(numOfWorkers)
     },
     sparkDestroyCluster := {
-      StaticLoggerBinder.sbtLogger = streams.value.log
       sparkDeployer.destroyCluster()
     },
 
     sparkShowMachines := {
-      StaticLoggerBinder.sbtLogger = streams.value.log
       sparkDeployer.showMachines()
     },
 
     sparkUploadJar := {
-      StaticLoggerBinder.sbtLogger = streams.value.log
       sparkDeployer.uploadJar(assembly.value)
     },
     sparkSubmitJob := {
-      StaticLoggerBinder.sbtLogger = streams.value.log
       sparkDeployer.submitJob(assembly.value, spaceDelimited().parsed)
     },
     sparkSubmitJobWithMain := {
-      StaticLoggerBinder.sbtLogger = streams.value.log
       val args = spaceDelimited().parsed
       require(args.size > 0, "Usage: sparkSubmitJobWithMain MainClass <args>")
       val mainClass = args.head
@@ -154,7 +146,6 @@ object SparkDeployerPlugin extends AutoPlugin {
       }
     },
     sparkRestartCluster := {
-      StaticLoggerBinder.sbtLogger = streams.value.log
       sparkDeployer.restartCluster()
     }
   )
