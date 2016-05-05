@@ -27,8 +27,8 @@ import scala.util.{Failure, Success, Try}
 
 class SparkDeployer(val config: Config) extends Logging {
   implicit val clusterConf = new ClusterConf(config)
-  implicit val ec = ExecutionContext.fromExecutorService(new ForkJoinPool(clusterConf.threadPoolSize))
-
+  implicit val ec = SparkDeployer.ec
+  
   private val masterName = clusterConf.clusterName + "-master"
   private val workerPrefix = clusterConf.clusterName + "-worker"
 
@@ -87,12 +87,14 @@ class SparkDeployer(val config: Config) extends Logging {
   }
   
   private def runStartupScript(machine: Machine) = {
-    clusterConf.startupScript.foreach{ script =>
-      SSH(machine.address)
-        .withRemoteCommand(script)
-        .withRunningMessage(s"[${machine.name}] Running startup script.")
-        .withTTY
-        .run
+    clusterConf.startupScript.foreach { commands =>
+      commands.foreach { cmd =>
+        SSH(machine.address)
+          .withRemoteCommand(cmd)
+          .withRunningMessage(s"[${machine.name}] Running startup script.")
+          .withTTY
+          .run
+      }
     }
   }
 
@@ -234,7 +236,7 @@ class SparkDeployer(val config: Config) extends Logging {
       }
   }
 
-  def uploadJar(jar: File) = {
+  def uploadFile(file: File, targetPath: String) = {
     getMasterOpt match {
       case None =>
         sys.error("No master found.")
@@ -249,20 +251,23 @@ class SparkDeployer(val config: Config) extends Logging {
           ))
           .mkString(" ")
 
-        val uploadJarCmd = Seq(
+        val uploadFileCmd = Seq(
           "rsync",
           "--progress",
           "-ve", sshCmd,
-          jar.getAbsolutePath,
-          s"${clusterConf.user}@${masterAddress}:~/job.jar"
+          file.getAbsolutePath,
+          s"${clusterConf.user}@${masterAddress}:${targetPath}"
         )
-        log.info(uploadJarCmd.mkString(" "))
-        if (uploadJarCmd.! != 0) {
-          sys.error("[rsync-error] Failed uploading jar.")
-        } else {
-          log.info("Jar uploaded, you can now login to master and submit the job. Login command: " + SSH(master.address).getCommand)
+        log.info(uploadFileCmd.mkString(" "))
+        if (uploadFileCmd.! != 0) {
+          sys.error("[rsync-error] Failed uploading file.")
         }
     }
+  }
+  
+  def uploadJar(jar: File) = {
+    uploadFile(jar, "~/job.jar")
+    log.info("Jar uploaded, you can now login to master and submit the job.")
   }
 
   def submitJob(jar: File, args: Seq[String], mainClass: String = null) = withFailover {
@@ -298,14 +303,46 @@ class SparkDeployer(val config: Config) extends Logging {
         .run
     }
   }
+  
+  def runCommand(command: String) = {
+    getMasterOpt match {
+      case None =>
+        log.error("No master found.")
+      case Some(master) =>
+        SSH(master.address)
+          .withRemoteCommand(command)
+          .withAWSCredentials
+          .withTTY
+          .run
+    }
+  }
+  
+  def runCommands(configKey: String) = {
+    getMasterOpt match {
+      case None =>
+        log.error("No master found.")
+      case Some(master) =>
+        config.as[Seq[String]](configKey).foreach { command =>
+          SSH(master.address)
+            .withRemoteCommand(command)
+            .withAWSCredentials
+            .withTTY
+            .run
+        }
+    }
+  }
 }
 
 object SparkDeployer {
+  val ec = ExecutionContext.fromExecutorService(new ForkJoinPool(100))
+  
   def fromConfig(config: Config) = {
-    config.as[Option[String]]("target-config").map {
-      targetConfig => new SparkDeployer(config.as[Config](targetConfig))
-    }.getOrElse(new SparkDeployer(config))
+    new SparkDeployer(config)
   }
-  def fromFile(configFile: File) = fromConfig(ConfigFactory.parseFile(configFile).resolve())
-  def fromFile(configPath: String): SparkDeployer = fromFile(new File(configPath))
+  
+  def fromFile(configPath: String, key: String = null) = {
+    val rootConfig = ConfigFactory.parseFile(new File(configPath)).resolve()
+    val config = Option(key).map(key => rootConfig.as[Config](key)).getOrElse(rootConfig)
+    fromConfig(config)
+  }
 }

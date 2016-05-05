@@ -35,6 +35,7 @@ object SparkDeployerPlugin extends AutoPlugin {
 
   object autoImport {
     lazy val sparkDeployerConf = taskKey[Config]("Raw configuration.")
+    lazy val sparkChangeConfig = inputKey[Unit]("Change the target key in spark-deployer.conf.")
 
     lazy val sparkCreateMaster = taskKey[Unit]("Create master.")
     lazy val sparkAddWorkers = inputKey[Unit]("Add workers.")
@@ -45,9 +46,13 @@ object SparkDeployerPlugin extends AutoPlugin {
 
     lazy val sparkShowMachines = taskKey[Unit]("Show the addresses of machines.")
 
+    lazy val sparkUploadFile = inputKey[Unit]("Upload a file to master.")
     lazy val sparkUploadJar = taskKey[Unit]("Upload job jar to master.")
     lazy val sparkSubmitJob = inputKey[Unit]("Upload and run the job directly.")
     lazy val sparkSubmitJobWithMain = inputKey[Unit]("Upload and run the job directly, with main class specified.")
+    
+    lazy val sparkRunCommand = inputKey[Unit]("Run a command on master.")
+    lazy val sparkRunCommands = inputKey[Unit]("Run a sequence of commands from spark-deployer.conf on master.")
 
     lazy val sparkRemoveS3Dir = inputKey[Unit]("Remove the s3 directory include _$folder$ postfix file.")
     lazy val sparkRestartCluster = taskKey[Unit]("Restart spark master/worker with new environment variables.")
@@ -56,9 +61,8 @@ object SparkDeployerPlugin extends AutoPlugin {
   override def trigger = allRequirements
   override def requires = AssemblyPlugin
   
-  lazy val sparkDeployer = {
-    SparkDeployer.fromFile(sys.env.get("SPARK_DEPLOYER_CONF").getOrElse("spark-deployer.conf"))
-  }
+  var sparkDeployerKey: String = null
+  def sparkDeployer = SparkDeployer.fromFile(sys.env.get("SPARK_DEPLOYER_CONF").getOrElse("spark-deployer.conf"), sparkDeployerKey)
   
   override lazy val projectSettings = Seq(
     run in Compile <<= Defaults.runTask(fullClasspath in Compile, mainClass in (Compile, run), runner in (Compile, run)),
@@ -68,6 +72,10 @@ object SparkDeployerPlugin extends AutoPlugin {
     outputStrategy := Some(StdoutOutput),
     
     sparkDeployerConf := sparkDeployer.config,
+    sparkChangeConfig := {
+      val args = spaceDelimited().parsed
+      sparkDeployerKey = args.headOption.getOrElse(null)
+    },
 
     sparkCreateMaster := {
       sparkDeployer.createMaster()
@@ -108,6 +116,11 @@ object SparkDeployerPlugin extends AutoPlugin {
       sparkDeployer.showMachines()
     },
 
+    sparkUploadFile := {
+      val args = spaceDelimited().parsed
+      require(args.size == 2, "Usage: sparkUploadFile <local-path> <remote-path>")
+      sparkDeployer.uploadFile(new File(args.head), args.last)
+    },
     sparkUploadJar := {
       sparkDeployer.uploadJar(assembly.value)
     },
@@ -119,6 +132,17 @@ object SparkDeployerPlugin extends AutoPlugin {
       require(args.size > 0, "Usage: sparkSubmitJobWithMain MainClass <args>")
       val mainClass = args.head
       sparkDeployer.submitJob(assembly.value, args.tail, mainClass)
+    },
+
+    sparkRunCommand := {
+      val args = spaceDelimited().parsed
+      val command = args.mkString(" ")
+      sparkDeployer.runCommand(command)
+    },
+    sparkRunCommands := {
+      val args = spaceDelimited().parsed
+      val configKey = args.head
+      sparkDeployer.runCommands(configKey)
     },
 
     sparkRemoveS3Dir := {

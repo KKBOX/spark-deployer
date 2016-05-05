@@ -56,9 +56,7 @@ class ClusterConf(config: Config) {
 
   val destroyOnFail = config.as[Option[Boolean]]("destroy-on-fail").getOrElse(false)
 
-  val threadPoolSize = config.as[Option[Int]]("thread-pool-size").getOrElse(100)
-
   val enableS3A = config.as[Option[Boolean]]("enable-s3a").getOrElse(false)
   
-  val startupScript = config.as[Option[String]]("startup-script")
+  val startupScript = config.as[Option[Seq[String]]]("startup-script")
 }
