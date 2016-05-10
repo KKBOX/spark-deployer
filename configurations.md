@@ -161,7 +161,6 @@ default {
   
   ...
 }
-
 ```
 Then, after entering sbt, you can type `sparkChangeConfig child-config-1`, it will first load the settings in `default {...}` then overwrite `keypair` with `"jenkins"`.
 
