@@ -14,20 +14,15 @@
 
 package sparkdeployer
 
-import com.amazonaws.services.s3.model.DeleteObjectsRequest
-import com.typesafe.config.{ Config, ConfigFactory }
-
-import awscala.s3.Bucket
-import awscala.s3.S3
-import awscala.Region0
 import java.io.File
-import org.slf4j.impl.StaticLoggerBinder
-import sbt.AutoPlugin
-import sbt.Def.macroValueIT
-import sbt.Def.spaceDelimited
+
+import awscala.Region0
+import awscala.s3.{S3, Bucket}
+import com.amazonaws.services.s3.model.DeleteObjectsRequest
+import com.typesafe.config.Config
 import sbt._
+import sbt.Def.{spaceDelimited, macroValueIT}
 import sbt.Keys._
-import sbt.plugins.JvmPlugin
 import sbtassembly.AssemblyKeys._
 import sbtassembly.AssemblyPlugin
 
