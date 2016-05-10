@@ -14,20 +14,15 @@
 
 package sparkdeployer
 
-import com.amazonaws.services.s3.model.DeleteObjectsRequest
-import com.typesafe.config.{ Config, ConfigFactory }
-
-import awscala.s3.Bucket
-import awscala.s3.S3
-import awscala.Region0
 import java.io.File
-import org.slf4j.impl.StaticLoggerBinder
-import sbt.AutoPlugin
-import sbt.Def.macroValueIT
-import sbt.Def.spaceDelimited
+
+import awscala.Region0
+import awscala.s3.{S3, Bucket}
+import com.amazonaws.services.s3.model.DeleteObjectsRequest
+import com.typesafe.config.Config
 import sbt._
+import sbt.Def.{spaceDelimited, macroValueIT}
 import sbt.Keys._
-import sbt.plugins.JvmPlugin
 import sbtassembly.AssemblyKeys._
 import sbtassembly.AssemblyPlugin
 
@@ -61,16 +56,18 @@ object SparkDeployerPlugin extends AutoPlugin {
   override def trigger = allRequirements
   override def requires = AssemblyPlugin
   
-  var sparkDeployerKey: String = null
+  private var sparkDeployerKey: String = null
   def sparkDeployer = SparkDeployer.fromFile(sys.env.get("SPARK_DEPLOYER_CONF").getOrElse("spark-deployer.conf"), sparkDeployerKey)
   
-  override lazy val projectSettings = Seq(
+  lazy val localModeSettings = Seq(
     run in Compile <<= Defaults.runTask(fullClasspath in Compile, mainClass in (Compile, run), runner in (Compile, run)),
     runMain in Compile <<= Defaults.runTask(fullClasspath in Compile, mainClass in (Compile, run), runner in (Compile, run)),
     fork := true,
-    javaOptions := Seq("-Dspark.master=local[*]", s"-Dspark.app.name=${sparkDeployer.clusterConf.appName}"),
-    outputStrategy := Some(StdoutOutput),
-    
+    javaOptions := Seq("-Dspark.master=local[*]", s"-Dspark.app.name=local-app"),
+    outputStrategy := Some(StdoutOutput)
+  )
+  
+  override lazy val projectSettings = Seq(
     sparkDeployerConf := sparkDeployer.config,
     sparkChangeConfig := {
       val args = spaceDelimited().parsed
