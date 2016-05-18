@@ -61,7 +61,7 @@ object SparkDeployerPlugin extends AutoPlugin {
   
   lazy val localModeSettings = Seq(
     run in Compile <<= Defaults.runTask(fullClasspath in Compile, mainClass in (Compile, run), runner in (Compile, run)),
-    runMain in Compile <<= Defaults.runTask(fullClasspath in Compile, mainClass in (Compile, run), runner in (Compile, run)),
+    runMain in Compile <<= Defaults.runMainTask(fullClasspath in Compile, runner in (Compile, run)),
     fork := true,
     javaOptions := Seq("-Dspark.master=local[*]", s"-Dspark.app.name=local-app"),
     outputStrategy := Some(StdoutOutput)
