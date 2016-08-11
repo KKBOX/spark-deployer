@@ -16,8 +16,9 @@ package sparkdeployer
 
 import org.slf4s.Logging
 import scala.util.{Failure, Success, Try}
+import sys.process._
 
-object Helpers extends Logging {
+object Retry extends Logging {
   @annotation.tailrec
   private def retry[T](op: Int => T, attempts: Int): T = {
     Try { op(attempts) } match {
@@ -28,5 +29,56 @@ object Helpers extends Logging {
       case Failure(e) => throw e
     }
   }
-  def retry[T](op: Int => T)(implicit clusterConf: ClusterConf): T = retry(op, clusterConf.retryAttempts)
+  def apply[T](op: Int => T)(implicit clusterConf: ClusterConf): T = retry(op, clusterConf.retryAttempts)
+}
+
+case class SSH(
+  address: String,
+  remoteCommand: Option[String] = None,
+  ttyAllocated: Boolean = false,
+  retryEnabled: Boolean = false,
+  runningMessage: Option[String] = None,
+  errorMessage: Option[String] = None,
+  includeAWSCredentials: Boolean = false
+)(implicit clusterConf: ClusterConf) extends Logging {
+  def withRemoteCommand(cmd: String) = this.copy(remoteCommand = Some(cmd))
+  def withTTY = this.copy(ttyAllocated = true)
+  def withRetry = this.copy(retryEnabled = true)
+  def withRunningMessage(msg: String) = this.copy(runningMessage = Some(msg))
+  def withErrorMessage(msg: String) = this.copy(errorMessage = Some(msg))
+  def withAWSCredentials = this.copy(includeAWSCredentials = true)
+
+  private def fullCommandSeq(maskAWS: Boolean) = Seq(
+    "ssh",
+    "-o", "UserKnownHostsFile=/dev/null",
+    "-o", "StrictHostKeyChecking=no"
+  )
+    .++(clusterConf.pem.map(pem => Seq("-i", pem)).getOrElse(Seq.empty))
+    .++(if (ttyAllocated) Some("-tt") else None)
+    .:+(clusterConf.user + "@" + address)
+    .++(remoteCommand.map { remoteCommand =>
+      if (includeAWSCredentials) {
+        Seq(
+          "AWS_ACCESS_KEY_ID='" + (if (maskAWS) "*" else sys.env.get("AWS_ACCESS_KEY_ID").getOrElse("")) + "'",
+          "AWS_SECRET_ACCESS_KEY='" + (if (maskAWS) "*" else sys.env.get("AWS_SECRET_ACCESS_KEY").getOrElse("")) + "'",
+          remoteCommand
+        ).mkString(" ")
+      } else remoteCommand
+    })
+
+  def getCommand = fullCommandSeq(true).mkString(" ")
+
+  def run(): Int = {
+    val op = (attempts: Int) => {
+      if (clusterConf.pem.isEmpty) {
+        log.warn("[SSH] ssh without pem.")
+      }
+      log.info("[SSH] " + runningMessage.getOrElse("ssh") + s" Attempts: $attempts. Command: " + fullCommandSeq(true).mkString(" "))
+      val exitValue = fullCommandSeq(false).!
+      if (exitValue != 0) {
+        sys.error(s"[SSH] ${errorMessage.getOrElse("ssh error")}. exitValue = ${exitValue}.")
+      } else exitValue
+    }
+    if (retryEnabled) retry(op) else op(1)
+  }
 }

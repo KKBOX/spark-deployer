@@ -2,9 +2,9 @@ scalaVersion := "2.10.6"
 
 lazy val commonSettings = Seq(
   organization := "net.pishen",
-  version := "2.8.2",
+  version := "3.0.0-SNAPSHOT",
   scalaVersion := "2.10.6",
-  licenses += ("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0.html")),
+  licenses += ("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0.html")),
   homepage := Some(url("https://github.com/pishen/spark-deployer")),
   pomExtra := (
     <scm>
@@ -28,11 +28,8 @@ lazy val core = (project in file("core"))
     crossScalaVersions := Seq("2.10.6", "2.11.8"),
     libraryDependencies ++= Seq(
       "org.slf4s" %% "slf4s-api" % "1.7.12",
-      "net.ceedubs" %% "ficus" % "[1.0.1,1.1.2]",
-      "com.github.seratch" %% "awscala" % "0.5.5" excludeAll(ExclusionRule(organization = "com.amazonaws")),
-      "com.amazonaws" % "aws-java-sdk-s3" % "1.10.34",
-      "com.amazonaws" % "aws-java-sdk-ec2" % "1.10.34",
-      "org.pacesys" % "openstack4j" % "2.0.9"
+      "com.typesafe.play" %% "play-json" % "2.4.8",
+      "com.amazonaws" % "aws-java-sdk-ec2" % "1.11.23"
     )
   )
 
@@ -41,9 +38,13 @@ lazy val plugin = (project in file("plugin"))
   .settings(
     sbtPlugin := true,
     name := "spark-deployer-sbt",
-    addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.14.0"),
+    addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.14.3"),
     publishMavenStyle := false,
-    libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.1.7"
+    libraryDependencies += "com.github.eirslett" %% "sbt-slf4j" % "0.1",
+    libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.1.7",
+    ScriptedPlugin.scriptedSettings,
+    scriptedLaunchOpts ++= Seq("-Xmx1024M", "-Dplugin.version=" + version.value),
+    scriptedBufferLog := false
   )
   .dependsOn(core)
 

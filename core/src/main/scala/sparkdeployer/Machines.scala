@@ -14,19 +14,13 @@
 
 package sparkdeployer
 
-import scala.concurrent.Future
-
-trait Machines {
-  def createMachines(machineType: MachineType, names: Set[String]): Seq[Machine]
+object Machines {
+  def createMachines(names: Set[String], machineConf: MachineConf)(implicit conf: ClusterConf): Seq[Machine] = {
+    
+  }
+  
   def destroyMachines(ids: Set[String]): Unit
   def getMachines(): Seq[Machine]
-  
-  def createMachine(machineType: MachineType, name: String) = createMachines(machineType, Set(name)).head
-  def destroyMachine(id: String) = destroyMachines(Set(id))
 }
 
 case class Machine(id: String, name: String, address: String)
-
-sealed trait MachineType
-case object Master extends MachineType
-case object Worker extends MachineType

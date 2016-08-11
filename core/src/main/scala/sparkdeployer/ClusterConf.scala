@@ -15,48 +15,77 @@
 package sparkdeployer
 
 import java.io.File
-
-import com.typesafe.config.Config
-import net.ceedubs.ficus.Ficus._
 import org.slf4s.Logging
 
-class ClusterConf(config: Config) {
-  val platform = config.as[Option[String]]("platform").getOrElse("ec2")
+case class ClusterConf(
+  clusterName: String,
+  //credentials
+  keypair: String,
+  pem: Option[String],
+  //machine settings
+  region: String,
+  ami: String,
+  user: String,
+  rootDevice: String,
+  master: MachineConf,
+  worker: MachineConf,
+  subnetId: String,
+  iamRole: Option[String],
+  usePrivateIp: Boolean,
+  securityGroupIds: Seq[String],
+  //spark settings
+  sparkTgzUrl: String,
+  sparkEnv: Seq[String],
+  enableS3A: Boolean,
+  //pre-start
+  preStartCommands: Seq[String],
+  //other settings
+  retryAttempts: Int,
+  destroyOnFail: Boolean
+)
 
-  val clusterName = config.as[String]("cluster-name")
+case class MachineConf(
+  instanceType: String,
+  freeMemory: String,
+  diskSize: Int,
+  spotPrice: Option[String]
+)
 
-  val keypair = config.as[String]("keypair")
-  val pem = config.as[Option[String]]("pem").map { path =>
-    val pemFile = new File(path)
-    require(pemFile.exists(), "I can't find your pem file at " + pemFile.getAbsolutePath)
-    pemFile.getAbsolutePath
-  }
+// class ClusterConf(conf: Config) {
+//   val clusterName = conf.getString("cluster-name")
 
-  val user = config.as[Option[String]]("user").getOrElse("ec2-user")
+//   val keypair = config.as[String]("keypair")
+//   val pem = config.as[Option[String]]("pem").map { path =>
+//     val pemFile = new File(path)
+//     require(pemFile.exists(), "I can't find your pem file at " + pemFile.getAbsolutePath)
+//     pemFile.getAbsolutePath
+//   }
 
-  val addHostIp = config.as[Option[Boolean]]("add-host-ip").getOrElse(false)
+//   val user = config.as[Option[String]]("user").getOrElse("ec2-user")
 
-  val driverMemory = config.as[Option[String]]("master.driver-memory")
-  val executorMemory = config.as[Option[String]]("worker.executor-memory")
+//   val addHostIp = config.as[Option[Boolean]]("add-host-ip").getOrElse(false)
 
-  val retryAttempts = config.as[Option[Int]]("retry-attempts").getOrElse(20)
+//   val driverMemory = config.as[Option[String]]("master.driver-memory")
+//   val executorMemory = config.as[Option[String]]("worker.executor-memory")
 
-  val sparkTgzUrl = config.as[String]("spark-tgz-url")
-  val sparkTgzName = {
-    require(sparkTgzUrl.endsWith(".tgz"), "spark-tgz-url should ends with \".tgz\"")
-    sparkTgzUrl.split("/").last
-  }
-  val sparkDirName = sparkTgzName.dropRight(4)
+//   val retryAttempts = config.as[Option[Int]]("retry-attempts").getOrElse(20)
 
-  val mainClass = config.as[Option[String]]("main-class")
-  val appName = config.as[Option[String]]("app-name")
+//   val sparkTgzUrl = config.as[String]("spark-tgz-url")
+//   val sparkTgzName = {
+//     require(sparkTgzUrl.endsWith(".tgz"), "spark-tgz-url should ends with \".tgz\"")
+//     sparkTgzUrl.split("/").last
+//   }
+//   val sparkDirName = sparkTgzName.dropRight(4)
 
-  val securityGroupIds = config.as[Option[Set[String]]]("security-group-ids")
-  val sparkEnv = config.as[Option[Seq[String]]]("spark-env").getOrElse(Seq.empty)
+//   val mainClass = config.as[Option[String]]("main-class")
+//   val appName = config.as[Option[String]]("app-name")
 
-  val destroyOnFail = config.as[Option[Boolean]]("destroy-on-fail").getOrElse(false)
+//   val securityGroupIds = config.as[Option[Set[String]]]("security-group-ids")
+//   val sparkEnv = config.as[Option[Seq[String]]]("spark-env").getOrElse(Seq.empty)
 
-  val enableS3A = config.as[Option[Boolean]]("enable-s3a").getOrElse(false)
+//   val destroyOnFail = config.as[Option[Boolean]]("destroy-on-fail").getOrElse(false)
+
+//   val enableS3A = config.as[Option[Boolean]]("enable-s3a").getOrElse(false)
   
-  val startupScript = config.as[Option[Seq[String]]]("startup-script")
-}
+//   val startupScript = config.as[Option[Seq[String]]]("startup-script")
+// }
