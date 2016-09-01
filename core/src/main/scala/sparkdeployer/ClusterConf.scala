@@ -123,49 +123,51 @@ object ClusterConf extends Logging {
   private def getFreeMemory(region: String, instanceType: String) = {
     instanceTypes.find(t => t.region == region && t.name == instanceType)
       //spark will reserve 1G for system, we reserve 1.5G here
-      .map(t => s"${(t.memory - 1.5).floor}G")
+      .map(t => s"${(t.memory - 1.5).toInt}G")
   }
   private def getSpotPrice(region: String, instanceType: String) = {
     instanceTypes.find(t => t.region == region && t.name == instanceType).map(_.price)
   }
+  
+  //get ubuntu ami from http://cloud-images.ubuntu.com/locator/ec2/
+  case class UbuntuAMI(region: String, name: String, release: String, ami: String)
+  private val ubuntuAMIs = try {
+    val j = Json.parse {
+      val raw = Http("http://cloud-images.ubuntu.com/locator/ec2/releasesTable").asString.body
+      ConfigFactory.parseString(raw).root.render(ConfigRenderOptions.concise.setJson(true))
+    }.as[JsObject]
+    (j \ "aaData").as[Seq[Seq[String]]].filter(_(4) == "hvm:ebs-ssd").map { seq =>
+      UbuntuAMI(seq(0), seq(1), seq(5), xml.XML.loadString(seq(6)).text)
+    }
+  } catch {
+    case e: Exception =>
+      log.warn("Cannot get Ubuntu AMI, please report this issue.", e)
+      Seq.empty
+  }
 
-  /** suggested argument will overwrite the value in base */
+  /** suggested arguments will be ignored if base is not empty */
   def build(
     base: Option[ClusterConf] = None,
     suggestedClusterName: Option[String] = None,
     suggestedSparkVersion: Option[String] = None
   ) = {
-    val clusterName = readLine("cluster name", suggestedClusterName.orElse(base.map(_.clusterName)))
+    val clusterName = readLine("cluster name", base.map(_.clusterName).orElse(suggestedClusterName))
     
     val keypair = readLine("keypair", base.map(_.keypair))
     val pem = readLineOption("identity file (pem)", base.flatMap(_.pem))
     val region = readLine(
       "region", base.map(_.region)
     )
-    
-    println("Connecting to AWS, please wait...")
+
     val ec2 = new AmazonEC2Client().withRegion[AmazonEC2Client](Regions.fromName(region))
     
     val (ami, isDefaultAMI) = {
       //find default ubuntu ami
-      //ref: https://cloud-images.ubuntu.com/locator/ec2/
-      val defaultAMI = ec2.describeImages(
-        new DescribeImagesRequest().withFilters(
-          new Filter("owner-id").withValues("099720109477"),
-          new Filter("virtualization-type").withValues("hvm"),
-          new Filter("root-device-type").withValues("ebs")
-        )
-      )
-        .getImages.asScala
-        .filter(_.getName.startsWith("ubuntu/images/hvm-ssd/ubuntu-xenial-16.04-amd64-server-"))
-        .sortBy(_.getName)
+      val defaultAMI = ubuntuAMIs
+        .filter(u => u.name == "xenial" && u.region == region)
+        .sortBy(_.release)
         .lastOption
-        .map(_.getImageId)
-
-      if (defaultAMI.isEmpty) {
-        log.warn("Cannot get Ubuntu's AMI, please report this issue.")
-      }
-      
+        .map(_.ami)
       val res = readLine("ami", base.map(_.ami).orElse(defaultAMI))
       (res, defaultAMI.fold(false)(_ == res))
     }
@@ -175,24 +177,26 @@ object ClusterConf extends Logging {
     )
 
     val masterInstanceType = readLine(
-      "master's instance type", base.map(_.master.instanceType).orElse(Some("m4.large"))
+      "instance type of master", base.map(_.master.instanceType).orElse(Some("m4.large"))
     )
     val masterFreeMemory = readLine("driver memory", getFreeMemory(region, masterInstanceType))
     val masterDiskSize = readLine(
-      "master's disk size (GB)", base.map(_.master.diskSize).orElse(Some(15)).map(_.toString)
+      "disk size of master (GB)", base.map(_.master.diskSize).orElse(Some(15)).map(_.toString)
     ).toInt
-    val masterSpotPrice = readLineOption("master's spot price", None)
+    val masterSpotPrice = readLineOption(
+      "spot price of master (enter \"None\" to disable)", None
+    ).filterNot(_ == "None")
 
     val workerInstanceType = readLine(
-      "worker's instance type", base.map(_.worker.instanceType).orElse(Some("c4.xlarge"))
+      "instance type of worker", base.map(_.worker.instanceType).orElse(Some("c4.xlarge"))
     )
     val workerFreeMemory = readLine("executor memory", getFreeMemory(region, workerInstanceType))
     val workerDiskSize = readLine(
-      "worker's disk size (GB)", base.map(_.worker.diskSize).orElse(Some(60)).map(_.toString)
+      "disk size of worker (GB)", base.map(_.worker.diskSize).orElse(Some(60)).map(_.toString)
     ).toInt
     val workerSpotPrice = readLineOption(
-      "worker's spot price", getSpotPrice(region, workerInstanceType)
-    )
+      "spot price of worker (enter \"None\" to disable)", getSpotPrice(region, workerInstanceType)
+    ).filterNot(_ == "None")
 
     val subnetId = readLineOption("subnet id", base.flatMap(_.subnetId))
     val iamRole = readLineOption("IAM role", base.flatMap(_.iamRole))
@@ -214,7 +218,7 @@ object ClusterConf extends Logging {
       val suggestedTgzUrl = sparkVersion
         .map(v => s"http://d3kbcqa49mib13.cloudfront.net/spark-$v-bin-hadoop2.7.tgz")
 
-      val res = readLine("Spark's tarball url", suggestedTgzUrl.orElse(base.map(_.sparkTgzUrl)))
+      val res = readLine("Spark's tarball url", base.map(_.sparkTgzUrl).orElse(suggestedTgzUrl))
       (res, suggestedTgzUrl.fold(false)(_ == res))
     }
     val sparkDir = "spark"

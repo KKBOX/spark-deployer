@@ -25,12 +25,12 @@ import sbtassembly.AssemblyKeys._
 object SparkDeployerPlugin extends AutoPlugin {
 
   object autoImport {
-    lazy val configName = settingKey[Option[String]]("spark-deployer's config name.")
+    lazy val sparkConfig = settingKey[Option[(String, ClusterConf)]]("spark-deployer's config.")
     //lazy val sparkBuildConfig = inputKey[Unit]("Build a spark-deployer config.")
     //lazy val sparkChangeConfig = inputKey[Unit]("Change current spark-deployer config.")
 
     lazy val sparkCreateCluster = inputKey[Unit]("Create a cluster.")
-    lazy val sparkAddWorkers = inputKey[Unit]("Add workers.")    
+    lazy val sparkAddWorkers = inputKey[Unit]("Add workers.")
     lazy val sparkRemoveWorkers = inputKey[Unit]("Remove workers.")
     lazy val sparkDestroyCluster = taskKey[Unit]("Destroy the cluster.")
 
@@ -41,51 +41,52 @@ object SparkDeployerPlugin extends AutoPlugin {
   }
   import autoImport._
   override def trigger = allRequirements
-  
+
   val stdin = System.console()
-  
+  lazy val confDir = File("conf").createIfNotExists(true)
+  def configNames = confDir.children.toSeq.map(_.name.split("\\.").init.mkString("."))
+
   override lazy val projectSettings = Seq(
-    configName := {
-      if (File("conf/default.deployer.conf").exists) Some("default") else None
+    sparkConfig := {
+      val defaultConfFile = confDir / "default.json"
+      if (defaultConfFile.exists) Some("default" -> ClusterConf.load(defaultConfFile.pathAsString)) else None
     },
     shellPrompt := { state =>
-      Project.extract(state).get(configName).map("[\u001B[93m" + _ + "\u001B[0m]> ").getOrElse("> ")
+      Project.extract(state).get(sparkConfig).map("[\u001B[93m" + _._1 + "\u001B[0m]> ").getOrElse("> ")
     },
     commands ++= Seq(
-      Command("sparkBuildConfig")(_ => token(Space ~> NotQuoted) | success("default")) { (state, newConfigName) =>
-        StaticLoggerBinder.sbtLogger = state.log
-        
-        val extracted = Project.extract(state)
-        import extracted._
-        
-        File("conf").createIfNotExists(true)
-        
-        val configFile = File(s"conf/${newConfigName}.deployer.conf")
-        if (configFile.exists) {
-          state.log.error(s"config ${newConfigName} already exists, please use `sparkBuildConfig <new-config-name>` or delete the config file in conf/")
-          state
-        } else {
-          val suggestedClusterName = name in currentRef get structure.data
-          val suggestedSparkVersion = (libraryDependencies in currentRef get structure.data)
-            .flatMap(libs => libs.find(_.name == "spark-core").map(_.revision))
-          
-          val clusterConf = if (newConfigName == "default"){
-            ClusterConf.build(None, suggestedClusterName, suggestedSparkVersion)
+      Command("sparkBuildConfig") { _ =>
+        success("default" -> None) |
+          (Space ~> token(NotSpace, "<new-config-name>") ~
+            (if (configNames.isEmpty) success(None) else (" from " ~> oneOf(configNames.map(literal))).?))
+      } {
+        case (state, (newConfigName, baseConfigNameOpt)) =>
+          StaticLoggerBinder.sbtLogger = state.log
+
+          val extracted = Project.extract(state)
+          import extracted._
+
+          val configFile = confDir / s"${newConfigName}.json"
+          if (configFile.exists) {
+            state.log.error(s"config ${newConfigName} already exists, please use `sparkBuildConfig <new-config-name>` or delete the config file in conf/")
+            state
           } else {
-            val configNames = File("conf").children.toSeq.map(_.name.split("\\.").dropRight(2).mkString("."))
-            val templateConf = if (configNames.nonEmpty) {
-              println("There are existing configs in your conf/ directory, you can optionally choose one as a template:")
-              println(configNames.mkString("\t"))
-              val res = stdin.readLine("template config [None]: ").trim
-              if (res == "") None else Some(ClusterConf.load(s"conf/${res}.deployer.conf"))
-            } else None
-            
-            ClusterConf.build(templateConf, suggestedClusterName, suggestedSparkVersion)
+            val suggestedClusterName = name in currentRef get structure.data
+            val suggestedSparkVersion = (libraryDependencies in currentRef get structure.data)
+              .flatMap(libs => libs.find(_.name == "spark-core").map(_.revision))
+
+            val clusterConf = if (newConfigName == "default") {
+              ClusterConf.build(None, suggestedClusterName, suggestedSparkVersion)
+            } else {
+              val templateConfOpt = baseConfigNameOpt.map { name =>
+                ClusterConf.load(confDir.pathAsString + "/" + name + ".json")
+              }
+              ClusterConf.build(templateConfOpt, suggestedClusterName, suggestedSparkVersion)
+            }
+
+            clusterConf.save(confDir.pathAsString + "/" + newConfigName + ".json")
+            Project.extract(state).append(Seq(sparkConfig := Some(newConfigName -> clusterConf)), state)
           }
-          
-          clusterConf.save(s"conf/${newConfigName}.deployer.conf")
-          Project.extract(state).append(Seq(configName := Some(newConfigName)), state)
-        }
       }
     )
   )
