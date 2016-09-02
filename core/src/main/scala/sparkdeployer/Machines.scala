@@ -33,14 +33,14 @@ class Machines(implicit conf: ClusterConf) extends Logging {
     val existingIds = getNonTerminatedInstances.map(_.getInstanceId).intersect(ids).distinct
 
     if (existingIds.nonEmpty) {
-      log.info(s"[EC2] Terminating ${existingIds.size} instances.")
+      log.info(s"Terminating ${existingIds.size} instances.")
       ec2.terminateInstances(new TerminateInstancesRequest(existingIds.asJava))
       Retry { i =>
-        log.info(s"[EC2] Checking status. Attempts: $i.")
+        log.info(s"[attempt:$i] Checking status.")
         val nonTerminatedTargetInstances = getNonTerminatedInstances.map(_.getInstanceId).intersect(existingIds)
-        assert(nonTerminatedTargetInstances.isEmpty, "[EC2] Some instances are not terminated: " + nonTerminatedTargetInstances.mkString(","))
+        assert(nonTerminatedTargetInstances.isEmpty, "Some instances are not terminated: " + nonTerminatedTargetInstances.mkString(","))
       }
-      log.info("[EC2] All instances are terminated.")
+      log.info("All instances are terminated.")
     }
   }
   
@@ -80,7 +80,7 @@ class Machines(implicit conf: ClusterConf) extends Logging {
 
     val instanceIds = try {
       Retry { i =>
-        log.info(s"[EC2] Getting instance ids from spot requests. Attempts: $i.")
+        log.info(s"[attempt:$i] Getting instance ids from spot requests.")
         val descReq = new DescribeSpotInstanceRequestsRequest().withSpotInstanceRequestIds(spotReqIds.asJava)
         ec2.describeSpotInstanceRequests(descReq).getSpotInstanceRequests.asScala.toSeq
           .map { req =>
@@ -96,7 +96,7 @@ class Machines(implicit conf: ClusterConf) extends Logging {
       }
     } catch {
       case e: Throwable =>
-        log.error(s"[EC2] Spot instance creation timeout. Canceling...")
+        log.error(s"Spot instance creation timeout. Canceling...")
         
         ec2.cancelSpotInstanceRequests(new CancelSpotInstanceRequestsRequest().withSpotInstanceRequestIds(spotReqIds.asJava))
         
@@ -145,7 +145,7 @@ class Machines(implicit conf: ClusterConf) extends Logging {
     def fill(existMachines: Seq[Machine], attempts: Int): Seq[Machine] = {
       val number = names.size - existMachines.size
       
-      log.info(s"[EC2] Creating $number instances...")
+      log.info(s"Creating $number instances...")
       val instances = machineConf.spotPrice match {
         case Some(price) => requestSpotInstances(machineConf.instanceType, machineConf.diskSize, price, number)
         case None => requestOnDemandInstances(machineConf.instanceType, machineConf.diskSize, number)
@@ -156,13 +156,13 @@ class Machines(implicit conf: ClusterConf) extends Logging {
           val id = instance.getInstanceId
           try {
             Retry { i =>
-              log.info(s"[EC2] [$id] Naming instance. Attempts: $i.")
+              log.info(s"[$id] [attempt:$i] Naming instance.")
               ec2.createTags(new CreateTagsRequest().withResources(id).withTags(new Tag("Name", name)))
             }
 
             //retry getting address if the instance exists.
             val address = Retry { i =>
-              log.info(s"[EC2] [$id] Getting instance's address. Attempts: $i.")
+              log.info(s"[$id] [attempt:$i] Getting instance's address.")
               getNonTerminatedInstances.find(_.getInstanceId == id) match {
                 case Some(instance) =>
                   val address = if (conf.usePrivateIp) instance.getPrivateIpAddress else instance.getPublicDnsName
@@ -177,7 +177,7 @@ class Machines(implicit conf: ClusterConf) extends Logging {
             Right(Machine(id, name, address))
           } catch {
             case e: Throwable =>
-              log.warn(s"[EC2] [$id] API error when creating instance.", e)
+              log.warn(s"[$id] API error when creating instance.", e)
               Left(id)
           }
       }
@@ -195,7 +195,7 @@ class Machines(implicit conf: ClusterConf) extends Logging {
       } else if (attempts > 1) {
         fill(existMachines ++ newMachines, attempts - 1)
       } else {
-        log.error("[EC2] Failed on creating enough instances, destroying existing machines...")
+        log.error("Failed on creating enough instances, destroying existing machines...")
         destroyMachines((existMachines ++ newMachines).map(_.id))
         sys.error("Failed on creating enough instances.")
       }

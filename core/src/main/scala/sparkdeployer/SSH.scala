@@ -52,10 +52,10 @@ case class SSH(
 
   def run(): Int = {
     val op = (attempt: Int) => {
-      log.info(s"[${machine.name}] [attempt:${attempt}] ${getCommandSeq(true)}")
+      log.info(s"[${machine.name}] [attempt:${attempt}] ${getCommandSeq(true).mkString(" ")}")
       val exitValue = getCommandSeq(false).!
       if (exitValue != 0) {
-        sys.error(s"[${machine.name}] Error when running '${getCommandSeq(true)}'. exitValue = ${exitValue}.")
+        sys.error(s"[${machine.name}] Error when running '${getCommandSeq(true).mkString(" ")}'. exitValue = ${exitValue}.")
       } else exitValue
     }
     if (retryEnabled) Retry(op) else op(1)

@@ -66,15 +66,20 @@ class SparkDeployer(implicit conf: ClusterConf) extends Logging {
   
   //main functions
   def createCluster(numOfWorkers: Int) = {
+    if (getMaster.isDefined) {
+      sys.error("Master already exists.")
+    }
     val master = Future {
       val master = machines.createMachines(Seq(masterName), isMaster = true).head
       downloadSpark(master)
       runPreStart(master)
       startMaster(master)
-      log.info(s"[${master.name}] master started.")
+      log.info(s"[${master.name}] Master started.")
       master
     }
-    val workers = Future.sequence {
+    val workers = if (numOfWorkers == 0) {
+      Seq.empty[Future[Machine]]
+    } else {
       machines.createMachines(generateNewWorkerNames(numOfWorkers), isMaster = false).map {
         worker => Future {
           downloadSpark(worker)
@@ -82,14 +87,14 @@ class SparkDeployer(implicit conf: ClusterConf) extends Logging {
         }.flatMap { _ =>
           master.map { master =>
             startWorker(worker, master)
-            log.info(s"[${worker.name}] worker started.")
+            log.info(s"[${worker.name}] Worker started.")
             worker
           }
         }
       }
     }
     try {
-      Await.result(workers, Duration.Inf)
+      Await.result(Future.sequence(master +: workers), Duration.Inf)
     } catch {
       case e: Throwable =>
         log.error("Failed on creating cluster, cleaning up.")
@@ -106,7 +111,7 @@ class SparkDeployer(implicit conf: ClusterConf) extends Logging {
           downloadSpark(worker)
           runPreStart(worker)
           startWorker(worker, master)
-          log.info(s"[${worker.name}] worker started.")
+          log.info(s"[${worker.name}] Worker started.")
           worker
         }
       }
