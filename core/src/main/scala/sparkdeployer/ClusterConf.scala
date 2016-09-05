@@ -234,7 +234,7 @@ object ClusterConf extends Logging {
       ).mkString(" && ")) else None)
       .:+(s"cd $sparkDir/conf/ && cp log4j.properties.template log4j.properties && echo 'log4j.rootCategory=WARN, console' >> log4j.properties")
       //fix the encoding problem on ubuntu
-      .++(if (isDefaultAMI) Some("sudo sh -c \"echo -e 'LC_ALL=en_US.UTF-8\\nLANG=en_US.UTF-8' >> /etc/environment\"") else None)
+      .++(if (isDefaultAMI) Some("sudo bash -c \"echo -e 'LC_ALL=en_US.UTF-8\\nLANG=en_US.UTF-8' >> /etc/environment\"") else None)
     
     ClusterConf(
       clusterName, keypair, pem,
