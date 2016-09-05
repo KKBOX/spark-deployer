@@ -2,7 +2,7 @@
 
 [![Join the chat at https://gitter.im/KKBOX/spark-deployer](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/KKBOX/spark-deployer?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 * A Scala tool which helps deploying [Apache Spark](http://spark.apache.org/) stand-alone cluster and submitting job.
-* Currently supports [Amazon EC2](http://aws.amazon.com/ec2/) and OpenStack with Spark 1.4.1+.
+* Currently supports [Amazon EC2](http://aws.amazon.com/ec2/) with Spark 1.4.1+.
 * There are two modes when using spark-deployer, SBT plugin and embedded mode.
 
 ## SBT plugin mode

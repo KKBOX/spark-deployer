@@ -233,6 +233,8 @@ object ClusterConf extends Logging {
         "wget -nv https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/2.7.1/hadoop-aws-2.7.1.jar"
       ).mkString(" && ")) else None)
       .:+(s"cd $sparkDir/conf/ && cp log4j.properties.template log4j.properties && echo 'log4j.rootCategory=WARN, console' >> log4j.properties")
+      //fix the encoding problem on ubuntu
+      .++(if (isDefaultAMI) Some("sudo sh -c \"echo -e 'LC_ALL=en_US.UTF-8\\nLANG=en_US.UTF-8' >> /etc/environment\"") else None)
     
     ClusterConf(
       clusterName, keypair, pem,
