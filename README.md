@@ -95,7 +95,7 @@ Then, from your Scala code, you can do something like this:
 ```scala
 import sparkdeployer._
 
-// build ClusterConf by asking
+// build a ClusterConf
 val clusterConf = ClusterConf.build()
 
 // save and load ClusterConf
