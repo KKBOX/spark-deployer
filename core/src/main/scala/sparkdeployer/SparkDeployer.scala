@@ -14,237 +14,149 @@
 
 package sparkdeployer
 
-import com.typesafe.config.{Config, ConfigFactory}
-import net.ceedubs.ficus.Ficus._
 import java.io.File
 import java.util.concurrent.ForkJoinPool
 import org.slf4s.Logging
 import scala.collection.JavaConverters._
 import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.blocking
 import scala.concurrent.duration.Duration
 import scala.sys.process.stringSeqToProcess
 import scala.util.{Failure, Success, Try}
 
-class SparkDeployer(val config: Config) extends Logging {
-  implicit val clusterConf = new ClusterConf(config)
+class SparkDeployer(implicit conf: ClusterConf) extends Logging {
   implicit val ec = SparkDeployer.ec
-  
-  private val masterName = clusterConf.clusterName + "-master"
-  private val workerPrefix = clusterConf.clusterName + "-worker"
 
-  private val machines: Machines = clusterConf.platform match {
-    case "ec2" => new EC2Machines(config)
-    case "openstack" => new OSMachines(config)
-    case _ => sys.error("unsupported platform")
-  }
+  val masterName = conf.clusterName + "-master"
+  val workerPrefix = conf.clusterName + "-worker"
+  val machines = new Machines()
 
   //helper functions
-  def getMasterOpt() = machines.getMachines.find(_.name == masterName)
-  def getWorkers() = machines.getMachines.filter(_.name.startsWith(workerPrefix))
-
-  private def downloadSpark(machine: Machine) = {
-    val extractCmd = s"tar -zxf ${clusterConf.sparkTgzName}"
-    if (clusterConf.sparkTgzUrl.startsWith("s3://")) {
-      val s3Cmd = Seq("aws", "s3", "cp", "--only-show-errors", clusterConf.sparkTgzUrl, "./").mkString(" ")
-      SSH(machine.address).withRemoteCommand(s3Cmd + " && " + extractCmd).withAWSCredentials
-    } else {
-      SSH(machine.address).withRemoteCommand("wget -nv " + clusterConf.sparkTgzUrl + " && " + extractCmd)
-    }
-      .withRetry
-      .withRunningMessage(s"[${machine.name}] Downloading Spark.")
-      .withErrorMessage(s"[${machine.name}] Failed downloading Spark.")
-      .run
+  def getMaster() = machines.getMachines.find(_.name == masterName)
+  def getWorkers() = machines.getMachines.filter(_.name.startsWith(workerPrefix)).sortBy(_.name)
+  def generateNewWorkerNames(num: Int) = {
+    val maxIndex = getWorkers.lastOption.fold(0)(_.name.split("-").last.toInt)
+    val start = maxIndex + 1
+    val end = maxIndex + num
+    (start to end).map(i => s"$workerPrefix-$i").toSeq
   }
 
-  private def setupSparkEnv(machine: Machine, masterAddressOpt: Option[String]) = {
-    val sparkEnvPath = clusterConf.sparkDirName + "/conf/spark-env.sh"
-    val masterAddress = masterAddressOpt.getOrElse(machine.address)
-    val sparkEnvConf = (clusterConf.sparkEnv ++ Seq(s"SPARK_MASTER_IP=${masterAddress}", s"SPARK_PUBLIC_DNS=${machine.address}", s"SPARK_LOCAL_IP=${machine.address}")).mkString("\\n")
-    SSH(machine.address)
-      .withRemoteCommand(s"echo -e '$sparkEnvConf' > $sparkEnvPath && chmod u+x $sparkEnvPath")
+  def downloadSpark(machine: Machine) = {
+    SSH(machine)
+      .withRemoteCommand(s"mkdir -p ${conf.sparkDir} && wget -nv -O - ${conf.sparkTgzUrl} | tar -zx --strip-components 1 -C ${conf.sparkDir}")
       .withRetry
-      .withRunningMessage(s"[${machine.name}] Setting spark-env.")
-      .withErrorMessage(s"[${machine.name}] Failed setting spark-env.")
-      .run
-  }
-
-  private def runSparkSbin(machine: Machine, scriptName: String, args: Seq[String] = Seq.empty) = {
-    SSH(machine.address)
-      .withRemoteCommand(s"./${clusterConf.sparkDirName}/sbin/${scriptName} ${args.mkString(" ")}")
-      .withRetry
-      .withRunningMessage(s"[${machine.name}] ${scriptName}.")
-      .withErrorMessage(s"[${machine.name}] Failed on ${scriptName}.")
-      .run
-  }
-
-  private def addHostIp(machine: Machine) = {
-    SSH(machine.address)
-      .withRemoteCommand(s"echo ${machine.address} `hostname` | sudo tee -a /etc/hosts")
-      .withRetry
-      .withRunningMessage(s"[${machine.name}] Add host ip.")
-      .withTTY
       .run
   }
   
-  private def runStartupScript(machine: Machine) = {
-    clusterConf.startupScript.foreach { commands =>
-      commands.foreach { cmd =>
-        SSH(machine.address)
-          .withRemoteCommand(cmd)
-          .withRunningMessage(s"[${machine.name}] Running startup script.")
-          .withTTY
-          .run
-      }
+  def runPreStart(machine: Machine) = {
+    conf.preStartCommands.foreach { command =>
+      SSH(machine).withRemoteCommand(command).withTTY.run
     }
   }
-
-  private def withFailover[T](op: => T): T = {
-    Try { op } match {
-      case Success(x) => x
-      case Failure(e) =>
-        if (clusterConf.destroyOnFail) {
-          destroyCluster()
-        }
-        throw e
-    }
+  
+  def startMaster(machine: Machine) = {
+    SSH(machine).withRemoteCommand(s"./${conf.sparkDir}/sbin/start-master.sh -h ${machine.address}").run
+  }
+  
+  def startWorker(machine: Machine, master: Machine) = {
+    SSH(machine).withRemoteCommand(s"./${conf.sparkDir}/sbin/start-slave.sh -h ${machine.address} spark://${master.address}:7077").run
   }
 
+  //TODO make sure ssh key exist in the agent if no pem provided
+  
   //main functions
-  def createMaster() = withFailover {
-    assert(getMasterOpt.isEmpty, s"[$masterName] Master already exists.")
-    val master = machines.createMachine(Master, masterName)
-    downloadSpark(master)
-    if (clusterConf.enableS3A) {
-      SSH(master.address)
-        .withRemoteCommand(Seq(
-          "wget",
-          "-nv",
-          "https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk/1.7.4/aws-java-sdk-1.7.4.jar",
-          "&&",
-          "wget",
-          "-nv",
-          "https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/2.7.1/hadoop-aws-2.7.1.jar"
-        ).mkString(" "))
-        .withRetry
-        .withRunningMessage(s"[$masterName] Downloading s3a jars.")
-        .withErrorMessage(s"[$masterName] Failed downloading s3a jars.")
-        .run
+  def createCluster(numOfWorkers: Int) = {
+    if (getMaster.isDefined) {
+      sys.error("Master already exists.")
     }
-    setupSparkEnv(master, None)
-    if (clusterConf.addHostIp) {
-      addHostIp(master)
+    val master = Future {
+      val master = machines.createMachines(Seq(masterName), isMaster = true).head
+      downloadSpark(master)
+      runPreStart(master)
+      startMaster(master)
+      log.info(s"[${master.name}] Master started.")
+      master
     }
-    runStartupScript(master)
-    runSparkSbin(master, "start-master.sh")
-    log.info(s"[$masterName] Master started.")
-  }
-
-  def addWorkers(num: Int) = withFailover {
-    val masterAddress = getMasterOpt.map(_.address).getOrElse(sys.error("Master does not exist, can't create workers."))
-
-    val startIndex = getWorkers()
-      .map(_.name)
-      .map(_.split("-").last.toInt)
-      .sorted.reverse
-      .headOption.getOrElse(0) + 1
-
-    val names = (startIndex to startIndex + num - 1).map(workerPrefix + "-" + _).toSet
-
-    val workers = machines.createMachines(Worker, names)
-
-    val futures = workers.map { worker =>
-      Future {
-        downloadSpark(worker)
-        setupSparkEnv(worker, Some(masterAddress))
-        if (clusterConf.addHostIp) {
-          addHostIp(worker)
+    val workers = if (numOfWorkers == 0) {
+      Seq.empty[Future[Machine]]
+    } else {
+      machines.createMachines(generateNewWorkerNames(numOfWorkers), isMaster = false).map {
+        worker => Future {
+          downloadSpark(worker)
+          runPreStart(worker)
+        }.flatMap { _ =>
+          master.map { master =>
+            startWorker(worker, master)
+            log.info(s"[${worker.name}] Worker started.")
+            worker
+          }
         }
-        runStartupScript(worker)
-        runSparkSbin(worker, "start-slave.sh", Seq(s"spark://$masterAddress:7077"))
-        log.info(s"[${worker.name}] Worker started.")
-      }.recover {
-        case e: Exception =>
-          log.error(s"[${worker.name}] Failed on setting up worker.", e)
-          throw e
       }
     }
-
-    Await.result(Future.sequence(futures), Duration.Inf)
+    try {
+      Await.result(Future.sequence(master +: workers), Duration.Inf)
+    } catch {
+      case e: Throwable =>
+        log.error("Failed on creating cluster, cleaning up.")
+        destroyCluster()
+    }
   }
 
-  def createCluster(num: Int) = {
-    createMaster()
-    addWorkers(num)
-  }
-
-  def restartCluster() = {
-    getMasterOpt match {
-      case None => sys.error("Master does not exist, can't reload cluster.")
-      case Some(master) =>
-        //setup spark-env
-        (getWorkers :+ master).foreach {
-          machine => setupSparkEnv(machine, Some(master.address))
+  def addWorkers(num: Int) = {
+    val master = getMaster.getOrElse(sys.error("Master does not exist."))
+    val workers = machines.createMachines(generateNewWorkerNames(num), isMaster = false)
+    val processedWorkers = Future.sequence {
+      workers.map { worker => 
+        Future {
+          downloadSpark(worker)
+          runPreStart(worker)
+          startWorker(worker, master)
+          log.info(s"[${worker.name}] Worker started.")
+          worker
         }
-
-        //stop workers
-        getWorkers.foreach {
-          worker => runSparkSbin(worker, "stop-slave.sh")
-        }
-
-        //stop master
-        runSparkSbin(master, "stop-master.sh")
-
-        //start master
-        runSparkSbin(master, "start-master.sh")
-
-        //start workers
-        getWorkers.foreach {
-          worker => runSparkSbin(worker, "start-slave.sh", Seq(s"spark://${master.address}:7077"))
-        }
+      }
+    }
+    try {
+      Await.result(processedWorkers, Duration.Inf)
+    } catch {
+      case e: Throwable =>
+        log.error("Failed on adding workers, cleaning up.")
+        machines.destroyMachines(workers.map(_.id))
     }
   }
 
   def removeWorkers(num: Int) = {
-    val workers = getWorkers
-      .sortBy(_.name.split("-").last.toInt).reverse
-      .take(num)
-
-    log.info("Destroying workers.")
-    machines.destroyMachines(workers.map(_.id).toSet)
+    machines.destroyMachines(getWorkers.takeRight(num).map(_.id))
   }
 
   def destroyCluster() = {
-    machines.destroyMachines((getWorkers ++ getMasterOpt).map(_.id).toSet)
+    machines.destroyMachines((getWorkers ++ getMaster).map(_.id))
   }
 
-  def showMachines() = {
-    getMasterOpt match {
+  def showMachines(): Unit = {
+    getMaster match {
       case None =>
         log.info("No master found.")
       case Some(master) =>
         log.info(Seq(
-          s"[master] ${master.name}. IP address: ${master.address}",
-          "Login command: " + SSH(master.address).getCommand,
+          s"[${master.name}] ${master.address}",
+          s"Login command: ${SSH(master).getCommandSeq(true).mkString(" ")}",
           s"Web UI: http://${master.address}:8080"
         ).mkString("\n"))
     }
 
-    getWorkers
-      .sortBy(_.name.split("-").last.toInt)
-      .foreach { worker =>
-        log.info(s"[worker] ${worker.name}. IP address: ${worker.address}")
-      }
+    getWorkers.foreach { worker =>
+      log.info(s"[${worker.name}] ${worker.address}")
+    }
   }
 
   def uploadFile(file: File, targetPath: String) = {
-    getMasterOpt match {
+    getMaster match {
       case None =>
         sys.error("No master found.")
       case Some(master) =>
-        val masterAddress = master.address
-
         val sshCmd = Seq("ssh")
-          .++(clusterConf.pem.map(f => Seq("-i", f)).getOrElse(Seq.empty))
+          .++(conf.pem.fold(Seq.empty[String])(pem => Seq("-i", pem)))
           .++(Seq(
             "-o", "UserKnownHostsFile=/dev/null",
             "-o", "StrictHostKeyChecking=no"
@@ -256,7 +168,7 @@ class SparkDeployer(val config: Config) extends Logging {
           "--progress",
           "-ve", sshCmd,
           file.getAbsolutePath,
-          s"${clusterConf.user}@${masterAddress}:${targetPath}"
+          s"${conf.user}@${master.address}:${targetPath}"
         )
         log.info(uploadFileCmd.mkString(" "))
         if (uploadFileCmd.! != 0) {
@@ -264,85 +176,31 @@ class SparkDeployer(val config: Config) extends Logging {
         }
     }
   }
-  
-  def uploadJar(jar: File) = {
-    uploadFile(jar, "~/job.jar")
-    log.info("Jar uploaded, you can now login to master and submit the job.")
-  }
 
-  def submitJob(jar: File, args: Seq[String], mainClass: String = null) = withFailover {
-    uploadJar(jar)
+  def submit(jar: File, mainClass: String, args: Seq[String]) = {
+    uploadFile(jar, "~/job.jar")
 
     log.warn("You're submitting job directly, please make sure you have a stable network connection.")
-    getMasterOpt().foreach { master =>
-      val masterAddress = master.address
-      
+    getMaster().foreach { master =>
       val submitJobCmd = Seq(
-        s"./${clusterConf.sparkDirName}/bin/spark-submit",
-        "--master", s"spark://$masterAddress:7077"
-      )
-        .++(Option(mainClass).orElse(clusterConf.mainClass).toSeq.flatMap(c => Seq("--class", c)))
-        .++(clusterConf.appName.toSeq.flatMap(n => Seq("--name", n)))
-        .++(clusterConf.driverMemory.toSeq.flatMap(m => Seq("--driver-memory", m)))
-        .++(clusterConf.executorMemory.toSeq.flatMap(m => Seq("--executor-memory", m)))
-        .++(if (clusterConf.enableS3A) {
-          Seq(
-            "--jars", "aws-java-sdk-1.7.4.jar,hadoop-aws-2.7.1.jar",
-            "--conf", "spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem",
-            "--conf", "spark.hadoop.fs.s3a.buffer.dir=/tmp"
-          )
-        } else Seq.empty)
-        .++("job.jar" +: args)
-        .mkString(" ")
+        s"./${conf.sparkDir}/bin/spark-submit",
+        "--master", s"spark://${master.address}:7077",
+        "--class", mainClass,
+        "--name", conf.clusterName,
+        "--driver-memory", conf.master.freeMemory,
+        "--executor-memory", conf.worker.freeMemory,
+        "job.jar"
+      ).++(args).mkString(" ")
 
-      SSH(masterAddress)
+      SSH(master)
         .withRemoteCommand(submitJobCmd)
         .withAWSCredentials
         .withTTY
-        .withErrorMessage("Job submission failed.")
         .run
-    }
-  }
-  
-  def runCommand(command: String) = {
-    getMasterOpt match {
-      case None =>
-        log.error("No master found.")
-      case Some(master) =>
-        SSH(master.address)
-          .withRemoteCommand(command)
-          .withAWSCredentials
-          .withTTY
-          .run
-    }
-  }
-  
-  def runCommands(configKey: String) = {
-    getMasterOpt match {
-      case None =>
-        log.error("No master found.")
-      case Some(master) =>
-        config.as[Seq[String]](configKey).foreach { command =>
-          SSH(master.address)
-            .withRemoteCommand(command)
-            .withAWSCredentials
-            .withTTY
-            .run
-        }
     }
   }
 }
 
 object SparkDeployer {
   val ec = ExecutionContext.fromExecutorService(new ForkJoinPool(100))
-  
-  def fromConfig(config: Config) = {
-    new SparkDeployer(config)
-  }
-  
-  def fromFile(configPath: String, key: String = null) = {
-    val rootConfig = ConfigFactory.parseFile(new File(configPath)).resolve()
-    val config = Option(key).map(key => rootConfig.as[Config](key)).getOrElse(rootConfig)
-    fromConfig(config)
-  }
 }

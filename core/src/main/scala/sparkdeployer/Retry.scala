@@ -14,19 +14,19 @@
 
 package sparkdeployer
 
-import org.slf4s.Logging
 import scala.util.{Failure, Success, Try}
+import org.slf4s.Logging
 
-object Helpers extends Logging {
+object Retry extends Logging {
   @annotation.tailrec
-  private def retry[T](op: Int => T, attempts: Int): T = {
-    Try { op(attempts) } match {
+  def apply[T](op: Int => T, attempt: Int, maxAttempts: Int): T = {
+    Try { op(attempt) } match {
       case Success(x) => x
-      case Failure(e) if attempts > 1 =>
+      case Failure(e) if attempt < maxAttempts =>
         Thread.sleep(15000)
-        retry(op, attempts - 1)
+        apply(op, attempt + 1, maxAttempts)
       case Failure(e) => throw e
     }
   }
-  def retry[T](op: Int => T)(implicit clusterConf: ClusterConf): T = retry(op, clusterConf.retryAttempts)
+  def apply[T](op: Int => T)(implicit clusterConf: ClusterConf): T = apply(op, 1, clusterConf.retryAttempts)
 }

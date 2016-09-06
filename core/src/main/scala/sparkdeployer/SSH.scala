@@ -14,57 +14,50 @@
 
 package sparkdeployer
 
-import Helpers.retry
+import com.amazonaws.auth.DefaultAWSCredentialsProviderChain
 import org.slf4s.Logging
 import sys.process._
 
 case class SSH(
-  address: String,
+  machine: Machine,
   remoteCommand: Option[String] = None,
   ttyAllocated: Boolean = false,
   retryEnabled: Boolean = false,
-  runningMessage: Option[String] = None,
-  errorMessage: Option[String] = None,
   includeAWSCredentials: Boolean = false
-)(implicit clusterConf: ClusterConf) extends Logging {
+)(implicit conf: ClusterConf) extends Logging {
   def withRemoteCommand(cmd: String) = this.copy(remoteCommand = Some(cmd))
   def withTTY = this.copy(ttyAllocated = true)
   def withRetry = this.copy(retryEnabled = true)
-  def withRunningMessage(msg: String) = this.copy(runningMessage = Some(msg))
-  def withErrorMessage(msg: String) = this.copy(errorMessage = Some(msg))
   def withAWSCredentials = this.copy(includeAWSCredentials = true)
 
-  private def fullCommandSeq(maskAWS: Boolean) = Seq(
+  def getCommandSeq(maskAWS: Boolean) = Seq(
     "ssh",
     "-o", "UserKnownHostsFile=/dev/null",
     "-o", "StrictHostKeyChecking=no"
   )
-    .++(clusterConf.pem.map(pem => Seq("-i", pem)).getOrElse(Seq.empty))
+    .++(conf.pem.fold(Seq.empty[String])(pem => Seq("-i", pem)))
     .++(if (ttyAllocated) Some("-tt") else None)
-    .:+(clusterConf.user + "@" + address)
+    .:+(conf.user + "@" + machine.address)
     .++(remoteCommand.map { remoteCommand =>
       if (includeAWSCredentials) {
+        //get aws credentials in formal way
+        val credentials = new DefaultAWSCredentialsProviderChain().getCredentials
         Seq(
-          "AWS_ACCESS_KEY_ID='" + (if (maskAWS) "*" else sys.env.get("AWS_ACCESS_KEY_ID").getOrElse("")) + "'",
-          "AWS_SECRET_ACCESS_KEY='" + (if (maskAWS) "*" else sys.env.get("AWS_SECRET_ACCESS_KEY").getOrElse("")) + "'",
+          "AWS_ACCESS_KEY_ID='" + (if (maskAWS) "*" else credentials.getAWSAccessKeyId) + "'",
+          "AWS_SECRET_ACCESS_KEY='" + (if (maskAWS) "*" else credentials.getAWSSecretKey) + "'",
           remoteCommand
         ).mkString(" ")
       } else remoteCommand
     })
 
-  def getCommand = fullCommandSeq(true).mkString(" ")
-
   def run(): Int = {
-    val op = (attempts: Int) => {
-      if (clusterConf.pem.isEmpty) {
-        log.warn("[SSH] ssh without pem.")
-      }
-      log.info("[SSH] " + runningMessage.getOrElse("ssh") + s" Attempts: $attempts. Command: " + fullCommandSeq(true).mkString(" "))
-      val exitValue = fullCommandSeq(false).!
+    val op = (attempt: Int) => {
+      log.info(s"[${machine.name}] [attempt:${attempt}] ${getCommandSeq(true).mkString(" ")}")
+      val exitValue = getCommandSeq(false).!
       if (exitValue != 0) {
-        sys.error(s"[SSH] ${errorMessage.getOrElse("ssh error")}. exitValue = ${exitValue}.")
+        sys.error(s"[${machine.name}] Error when running '${getCommandSeq(true).mkString(" ")}'. exitValue = ${exitValue}.")
       } else exitValue
     }
-    if (retryEnabled) retry(op) else op(1)
+    if (retryEnabled) Retry(op) else op(1)
   }
 }

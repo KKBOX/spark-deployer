@@ -14,160 +14,183 @@
 
 package sparkdeployer
 
-import java.io.File
-
-import awscala.Region0
-import awscala.s3.{S3, Bucket}
-import com.amazonaws.services.s3.model.DeleteObjectsRequest
-import com.typesafe.config.Config
+import better.files._
+import org.slf4j.impl.StaticLoggerBinder
 import sbt._
+import sbinary.DefaultProtocol.StringFormat
+import Cache.seqFormat
+import sbt.Defaults.runMainParser
+import sbt.complete.DefaultParsers._
 import sbt.Def.{spaceDelimited, macroValueIT}
 import sbt.Keys._
 import sbtassembly.AssemblyKeys._
-import sbtassembly.AssemblyPlugin
 
 object SparkDeployerPlugin extends AutoPlugin {
 
   object autoImport {
-    lazy val sparkDeployerConf = taskKey[Config]("Raw configuration.")
-    lazy val sparkChangeConfig = inputKey[Unit]("Change the target key in spark-deployer.conf.")
+    lazy val sparkConfig = settingKey[Option[(String, ClusterConf)]]("spark-deployer's config.")
 
-    lazy val sparkCreateMaster = taskKey[Unit]("Create master.")
+    lazy val sparkCreateCluster = inputKey[Unit]("Create a cluster.")
     lazy val sparkAddWorkers = inputKey[Unit]("Add workers.")
-    lazy val sparkCreateCluster = inputKey[Unit]("Create master first, then add workers.")
+    lazy val sparkRemoveWorkers = inputKey[Unit]("Remove workers.")
+    lazy val sparkDestroyCluster = taskKey[Unit]("Destroy the cluster.")
 
-    lazy val sparkRemoveWorkers = inputKey[Unit]("Remove worker.")
-    lazy val sparkDestroyCluster = taskKey[Unit]("Destroy cluster.")
+    lazy val sparkShowMachines = taskKey[Unit]("Show the information of the machines.")
 
-    lazy val sparkShowMachines = taskKey[Unit]("Show the addresses of machines.")
-
-    lazy val sparkUploadFile = inputKey[Unit]("Upload a file to master.")
-    lazy val sparkUploadJar = taskKey[Unit]("Upload job jar to master.")
-    lazy val sparkSubmitJob = inputKey[Unit]("Upload and run the job directly.")
-    lazy val sparkSubmitJobWithMain = inputKey[Unit]("Upload and run the job directly, with main class specified.")
-    
-    lazy val sparkRunCommand = inputKey[Unit]("Run a command on master.")
-    lazy val sparkRunCommands = inputKey[Unit]("Run a sequence of commands from spark-deployer.conf on master.")
-
-    lazy val sparkRemoveS3Dir = inputKey[Unit]("Remove the s3 directory include _$folder$ postfix file.")
-    lazy val sparkRestartCluster = taskKey[Unit]("Restart spark master/worker with new environment variables.")
+    lazy val sparkSubmit = inputKey[Unit]("Submit the job.")
+    lazy val sparkSubmitMain = inputKey[Unit]("Submit the job with specified main class.")
   }
   import autoImport._
   override def trigger = allRequirements
-  override def requires = AssemblyPlugin
-  
-  private var sparkDeployerKey: String = null
-  def sparkDeployer = SparkDeployer.fromFile(sys.env.get("SPARK_DEPLOYER_CONF").getOrElse("spark-deployer.conf"), sparkDeployerKey)
-  
-  lazy val localModeSettings = Seq(
-    run in Compile <<= Defaults.runTask(fullClasspath in Compile, mainClass in (Compile, run), runner in (Compile, run)),
-    runMain in Compile <<= Defaults.runMainTask(fullClasspath in Compile, runner in (Compile, run)),
-    fork := true,
-    javaOptions := Seq("-Dspark.master=local[*]", s"-Dspark.app.name=local-app"),
-    outputStrategy := Some(StdoutOutput)
-  )
-  
-  override lazy val projectSettings = Seq(
-    sparkDeployerConf := sparkDeployer.config,
-    sparkChangeConfig := {
-      val args = spaceDelimited().parsed
-      sparkDeployerKey = args.headOption.getOrElse(null)
-    },
 
-    sparkCreateMaster := {
-      sparkDeployer.createMaster()
+  val stdin = System.console()
+  lazy val confDir = File("conf").createIfNotExists(true)
+  def configNames = confDir.children.toSeq.map(_.name.split("\\.").init.mkString("."))
+
+  override lazy val projectSettings = Seq(
+    sparkConfig := {
+      val defaultConfFile = confDir / "default.json"
+      if (defaultConfFile.exists) Some("default" -> ClusterConf.load(defaultConfFile.pathAsString)) else None
+    },
+    shellPrompt := { state =>
+      Project.extract(state).get(sparkConfig).map("[\u001B[36m" + _._1 + "\u001B[0m]> ").getOrElse("> ")
+    },
+    commands ++= Seq(
+      Command("sparkBuildConfig") { _ =>
+        (success("default") ~ success(None)) |
+          (Space ~> token(NotSpace, "<new-config-name>") ~
+            (if (configNames.isEmpty) success(None) else (" from " ~> oneOf(configNames.map(literal))).?))
+      } {
+        case (state, (newConfigName, baseConfigNameOpt)) =>
+          StaticLoggerBinder.sbtLogger = state.log
+
+          val extracted = Project.extract(state)
+          import extracted._
+
+          val suggestedClusterName = name in currentRef get structure.data
+          val suggestedSparkVersion = (libraryDependencies in currentRef get structure.data)
+            .flatMap(libs => libs.find(_.name == "spark-core").map(_.revision))
+
+          val templateConfOpt = baseConfigNameOpt.map { name =>
+            ClusterConf.load(confDir.pathAsString + "/" + name + ".json")
+          }
+          val clusterConf = ClusterConf.build(templateConfOpt, suggestedClusterName, suggestedSparkVersion)
+
+          clusterConf.save(confDir.pathAsString + "/" + newConfigName + ".json")
+          Project.extract(state).append(Seq(sparkConfig := Some(newConfigName -> clusterConf)), state)
+      },
+      Command("sparkChangeConfig") { _ =>
+        Space ~> NotSpace.examples(configNames: _*)
+      } { (state, configName) =>
+        StaticLoggerBinder.sbtLogger = state.log
+
+        val configFile = (confDir / s"${configName}.json")
+        if (configFile.exists) {
+          val clusterConf = ClusterConf.load(configFile.pathAsString)
+          Project.extract(state).append(Seq(sparkConfig := Some(configName -> clusterConf)), state)
+        } else {
+          state.log.error(s"Config ${configName} does not exist.")
+          state
+        }
+      }
+    ),
+    sparkCreateCluster := {
+      val log = streams.value.log
+      StaticLoggerBinder.sbtLogger = log
+      
+      val workers = (Space ~> NatBasic).parsed
+      
+      sparkConfig.value match {
+        case None =>
+          log.error("You don't have default config, use `sparkBuildConfig` to build one.")
+        case Some((_, clusterConf)) =>
+          new SparkDeployer()(clusterConf).createCluster(workers)
+      }
     },
     sparkAddWorkers := {
-      val args = spaceDelimited().parsed
-      require(args.length == 1, "Usage: sparkAddWorkers <num-of-workers>")
-
-      val numOfWorkers = args.head.toInt
-      require(numOfWorkers > 0, "num-of-workers should > 0")
-
-      sparkDeployer.addWorkers(numOfWorkers)
+      val log = streams.value.log
+      StaticLoggerBinder.sbtLogger = log
+      
+      val workers = (Space ~> NatBasic).parsed
+      
+      sparkConfig.value match {
+        case None =>
+          log.error("You don't have default config, use `sparkBuildConfig` to build one.")
+        case Some((_, clusterConf)) =>
+          new SparkDeployer()(clusterConf).addWorkers(workers)
+      }
     },
-    sparkCreateCluster := {
-      val args = spaceDelimited().parsed
-      require(args.length == 1, "Usage: sparkCreateCluster <num-of-workers>")
-
-      val numOfWorkers = args.head.toInt
-      require(numOfWorkers > 0, "num-of-workers should > 0")
-
-      sparkDeployer.createCluster(numOfWorkers)
-    },
-
     sparkRemoveWorkers := {
-      val args = spaceDelimited().parsed
-      require(args.length == 1, "Usage: sparkRemoveWorkers <num-of-workers>")
-
-      val numOfWorkers = args.head.toInt
-      require(numOfWorkers > 0, "num-of-workers should > 0")
-
-      sparkDeployer.removeWorkers(numOfWorkers)
+      val log = streams.value.log
+      StaticLoggerBinder.sbtLogger = log
+      
+      val workers = (Space ~> NatBasic).parsed
+      
+      sparkConfig.value match {
+        case None =>
+          log.error("You don't have default config, use `sparkBuildConfig` to build one.")
+        case Some((_, clusterConf)) =>
+          new SparkDeployer()(clusterConf).removeWorkers(workers)
+      }
     },
     sparkDestroyCluster := {
-      sparkDeployer.destroyCluster()
-    },
-
-    sparkShowMachines := {
-      sparkDeployer.showMachines()
-    },
-
-    sparkUploadFile := {
-      val args = spaceDelimited().parsed
-      require(args.size == 2, "Usage: sparkUploadFile <local-path> <remote-path>")
-      sparkDeployer.uploadFile(new File(args.head), args.last)
-    },
-    sparkUploadJar := {
-      sparkDeployer.uploadJar(assembly.value)
-    },
-    sparkSubmitJob := {
-      sparkDeployer.submitJob(assembly.value, spaceDelimited().parsed)
-    },
-    sparkSubmitJobWithMain := {
-      val args = spaceDelimited().parsed
-      require(args.size > 0, "Usage: sparkSubmitJobWithMain MainClass <args>")
-      val mainClass = args.head
-      sparkDeployer.submitJob(assembly.value, args.tail, mainClass)
-    },
-
-    sparkRunCommand := {
-      val args = spaceDelimited().parsed
-      val command = args.mkString(" ")
-      sparkDeployer.runCommand(command)
-    },
-    sparkRunCommands := {
-      val args = spaceDelimited().parsed
-      val configKey = args.head
-      sparkDeployer.runCommands(configKey)
-    },
-
-    sparkRemoveS3Dir := {
       val log = streams.value.log
-      val args = spaceDelimited().parsed
-      require(args.length == 1, "Please give the directory name.")
-      val path = args.head
-      require(path.startsWith("s3://"), "Path should start with s3://")
-      val bucket = Bucket(path.drop(5).takeWhile(_ != '/'))
-      val dirPrefix = {
-        val raw = path.drop(5).dropWhile(_ != '/').tail
-        if (raw.endsWith("/")) raw else raw + "/"
-      }
-
-      val s3 = S3().at(Region0(S3().location(bucket)))
-      s3.keys(bucket, dirPrefix).grouped(1000).foreach {
-        keys =>
-          val res = s3.deleteObjects(new DeleteObjectsRequest(bucket.getName).withKeys(keys: _*))
-          log.info(res.getDeletedObjects.size() + " objects deleted.")
-      }
-      s3.get(bucket, dirPrefix.init + "_$folder$").foreach {
-        obj =>
-          s3.deleteObject(obj)
-          log.info(obj.getKey + " deleted.")
+      StaticLoggerBinder.sbtLogger = log
+      
+      sparkConfig.value match {
+        case None =>
+          log.error("You don't have default config, use `sparkBuildConfig` to build one.")
+        case Some((_, clusterConf)) =>
+          new SparkDeployer()(clusterConf).destroyCluster()
       }
     },
-    sparkRestartCluster := {
-      sparkDeployer.restartCluster()
+    sparkShowMachines := {
+      val log = streams.value.log
+      StaticLoggerBinder.sbtLogger = log
+      
+      sparkConfig.value match {
+        case None =>
+          log.error("You don't have default config, use `sparkBuildConfig` to build one.")
+        case Some((_, clusterConf)) =>
+          new SparkDeployer()(clusterConf).showMachines()
+      }
+    },
+    sparkSubmit := {
+      val log = streams.value.log
+      StaticLoggerBinder.sbtLogger = log
+      
+      val args = spaceDelimited("<args-for-your-job>").parsed
+      
+      sparkConfig.value match {
+        case None =>
+          log.error("You don't have default config, use `sparkBuildConfig` to build one.")
+        case Some((_, clusterConf)) =>
+          (mainClass in Compile).value match {
+            case None =>
+              log.error("I can't determine a main class for you, please use `sparkSubmitMain` if you have multiple main classes.")
+            case Some(mainClass) =>
+              val jar = assembly.value
+              new SparkDeployer()(clusterConf).submit(jar, mainClass, args)
+          }
+      }
+    },
+    //copied from https://github.com/sbt/sbt/blob/v0.13.12/main/src/main/scala/sbt/Defaults.scala#L734
+    sparkSubmitMain <<= {
+      val parser = loadForParser(discoveredMainClasses in Compile)((s, names) => runMainParser(s, names getOrElse Nil))
+      Def.inputTask {
+        val log = streams.value.log
+        StaticLoggerBinder.sbtLogger = log
+        
+        val (mainClass, args) = parser.parsed
+        sparkConfig.value match {
+          case None =>
+            log.error("You don't have default config, use `sparkBuildConfig` to build one.")
+          case Some((_, clusterConf)) =>
+            val jar = assembly.value
+            new SparkDeployer()(clusterConf).submit(jar, mainClass, args)
+        }
+      }
     }
   )
 }
+
