@@ -62,23 +62,27 @@
   }
   ```
 
-6. Enter `sbt`, and build a config with
+6. Enter `sbt`, and build a config by:
 
   ```
   > sparkBuildConfig
   ```
+  
+  (Use `sparkBuildConfig <new-config-name>` to build additional config.)
 
-7. Create a cluster with
+7. Create a cluster with 1 master and 2 workers by:
 
   ```
-  > sparkCreateCluster <number-of-workers>
+  > sparkCreateCluster 2
   ```
 
-8. Submit your job with
+8. Submit your job by:
 
   ```
   > sparkSubmit
   ```
+  
+  (Use `sparkSubmit <args>` if you have arguments for your job.)
 
 9. When your job is done, destroy your cluster with
 
