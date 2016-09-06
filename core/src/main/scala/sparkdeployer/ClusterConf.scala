@@ -35,11 +35,11 @@ case class MachineConf(
 
 case class ClusterConf(
   clusterName: String,
+  region: String,
   //credentials
   keypair: String,
   pem: Option[String],
   //machine settings
-  region: String,
   ami: String,
   user: String,
   rootDevice: String,
@@ -153,14 +153,20 @@ object ClusterConf extends Logging {
   ) = {
     val clusterName = readLine("cluster name", base.map(_.clusterName).orElse(suggestedClusterName))
     
-    val keypair = readLine("keypair", base.map(_.keypair))
-    val pem = readLineOption("identity file (pem)", base.flatMap(_.pem))
     val region = readLine(
       "region", base.map(_.region)
     )
 
     val ec2 = new AmazonEC2Client().withRegion[AmazonEC2Client](Regions.fromName(region))
     
+    println(s"(You may check https://${region}.console.aws.amazon.com/ec2/v2/home#KeyPairs to fill following settings.)")
+    val keypair = readLine("keypair", base.map(_.keypair))
+    val pem = readLineOption("identity file (pem)", base.flatMap(_.pem)).map { path =>
+      if (path.startsWith("~")) {
+        sys.props.get("user.home").getOrElse(sys.error("I can't determine your home folder.")) + path.substring(1)
+      } else path
+    }
+
     val (ami, isDefaultAMI) = {
       //find default ubuntu ami
       val defaultAMI = ubuntuAMIs
@@ -171,11 +177,14 @@ object ClusterConf extends Logging {
       val res = readLine("ami", base.map(_.ami).orElse(defaultAMI))
       (res, defaultAMI.fold(false)(_ == res))
     }
-    val user = readLine("user", base.map(_.user).orElse(if (isDefaultAMI) Some("ubuntu") else None))
-    val rootDevice = readLine(
-      "root device", base.map(_.rootDevice).orElse(if (isDefaultAMI) Some("/dev/sda1") else None)
-    )
+    val user = if (isDefaultAMI) "ubuntu" else {
+      readLine("user name (used to ssh into ec2 machines)", base.map(_.user))
+    }
+    val rootDevice = if (isDefaultAMI) "/dev/sda1" else {
+      readLine("root device", base.map(_.rootDevice))
+    }
 
+    println("(You may check https://aws.amazon.com/ec2/pricing/ to fill following settings.)")
     val masterInstanceType = readLine(
       "instance type of master", base.map(_.master.instanceType).orElse(Some("m4.large"))
     )
@@ -198,11 +207,17 @@ object ClusterConf extends Logging {
       "spot price of worker (enter \"None\" to disable)", getSpotPrice(region, workerInstanceType)
     ).filterNot(_ == "None")
 
+    println(s"(You may check https://${region}.console.aws.amazon.com/vpc/home#subnets to fill following settings.)")
     val subnetId = readLineOption("subnet id", base.flatMap(_.subnetId))
+    
+    println("(You may check https://console.aws.amazon.com/iam/home#roles to fill following settings.)")
     val iamRole = readLineOption("IAM role", base.flatMap(_.iamRole))
-    val usePrivateIp = readLine(
+    
+    val usePrivateIp = if (subnetId.nonEmpty) true else readLine(
       "use private ip", base.map(_.usePrivateIp).orElse(Some(true)).map(_.toString)
     ).toBoolean
+    
+    println(s"(You may check https://${region}.console.aws.amazon.com/ec2/v2/home#SecurityGroups to fill following settings.)")
     val securityGroupIds = readLineOption(
       "security group ids (comma separated)", base.map(_.securityGroupIds.mkString(","))
     ).toSeq.flatMap(_.split(",").map(_.trim))
@@ -237,8 +252,8 @@ object ClusterConf extends Logging {
       .++(if (isDefaultAMI) Some("sudo bash -c \"echo -e 'LC_ALL=en_US.UTF-8\\nLANG=en_US.UTF-8' >> /etc/environment\"") else None)
     
     ClusterConf(
-      clusterName, keypair, pem,
-      region, ami, user, rootDevice,
+      clusterName, region, keypair, pem,
+      ami, user, rootDevice,
       MachineConf(masterInstanceType, masterFreeMemory, masterDiskSize, masterSpotPrice),
       MachineConf(workerInstanceType, workerFreeMemory, workerDiskSize, workerSpotPrice),
       subnetId, iamRole, usePrivateIp, securityGroupIds,
