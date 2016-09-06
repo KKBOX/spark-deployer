@@ -6,6 +6,9 @@
 * There are two modes when using spark-deployer, SBT plugin mode and embedded mode.
 
 ## SBT plugin mode
+
+Here are the basic steps to run a Spark job (all the sbt commands support TAB-completion):
+
 1. Set the environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.
 2. Prepare a project with structure like below:
 
@@ -67,8 +70,6 @@
   ```
   > sparkBuildConfig
   ```
-  
-  (Use `sparkBuildConfig <new-config-name>` to build additional config.)
 
 7. Create a cluster with 1 master and 2 workers by:
 
@@ -76,18 +77,52 @@
   > sparkCreateCluster 2
   ```
 
-8. Submit your job by:
+8. See your cluster's status by:
+
+  ```
+  > sparkShowMachines
+  ```
+
+9. Submit your job by:
 
   ```
   > sparkSubmit
   ```
-  
-  (Use `sparkSubmit <args>` if you have arguments for your job.)
 
-9. When your job is done, destroy your cluster with
+10. When your job is done, destroy your cluster with
 
   ```
   > sparkDestroyCluster
+  ```
+
+### Advanced functions
+* To build config with different name or build a config based on old one:
+
+  ```
+  > sparkBuildConfig <new-config-name>
+  > sparkBuildConfig <new-config-name> from <old-config-name>
+  ```
+
+  All the configs are stored as json files in the `conf/` folder.
+
+* To change the current config:
+
+  ```
+  > sparkChangeConfig <config-name>
+  ```
+
+* To submit a job with arguments or with a main class:
+
+  ```
+  > sparkSubmit <args>
+  > sparkSubmitMain mypackage.Main <args>
+  ```
+
+* To add or remove worker machines dynamically:
+
+  ```
+  > sparkAddWorkers <num-of-workers>
+  > sparkRemoveWorkers <num-of-workers>
   ```
 
 ## Embedded mode
