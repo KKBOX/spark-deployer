@@ -70,6 +70,8 @@ Here are the basic steps to run a Spark job (all the sbt commands support TAB-co
   ```
   > sparkBuildConfig
   ```
+  
+  (Most settings have default values, just hit Enter to go through it.)
 
 7. Create a cluster with 1 master and 2 workers by:
 
@@ -103,7 +105,7 @@ Here are the basic steps to run a Spark job (all the sbt commands support TAB-co
   > sparkBuildConfig <new-config-name> from <old-config-name>
   ```
 
-  All the configs are stored as json files in the `conf/` folder.
+  All the configs are stored as json files in the `conf/` folder. You can modify it if you know what you're doing.
 
 * To change the current config:
 
@@ -163,3 +165,23 @@ spark-deployer uses slf4j, remember to add your own backend to see the log. For 
 ```
 libraryDependencies += "org.slf4j" % "slf4j-simple" % "1.7.14"
 ```
+
+## FAQ
+
+### Could I use other ami?
+Yes, just specify the ami id when running `sparkBuildConfig`. The image should be HVM EBS-Backed with Java 7+ installed. You can also run some commands (e.g. `sudo apt-get -y install openjdk-8-jre &> logfile`) before Spark start on each machine by editing the `preStartCommands` in json config.
+
+When using custom ami, the `root device` should be your root volume's name (`/dev/sda1` for Ubuntu) that can be enlarged by `disk size` settings in master and workers.
+
+### Could I use custom Spark tarball?
+Yes, just change the tgz url when running `sparkBuildConfig`, the tgz will be extracted as a `spark/` folder in each machine's home folder.
+
+### What rules should I set on my security group?
+Assuming your security group id is `sg-abcde123`, the basic settings is:
+
+Type | Protocol | Port Range | Source
+---- | -------- | ---------- | ------
+All traffic | All | All | `sg-abcde123`
+SSH | TCP | 22 | `<your-allowed-ip>`
+Custom TCP Rule | TCP | 8080-8081 | `<your-allowed-ip>`
+Custom TCP Rule | TCP | 4040 | `<your-allowed-ip>`
