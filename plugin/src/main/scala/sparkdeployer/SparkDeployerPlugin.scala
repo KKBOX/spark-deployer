@@ -53,7 +53,7 @@ object SparkDeployerPlugin extends AutoPlugin {
       if (defaultConfFile.exists) Some("default" -> ClusterConf.load(defaultConfFile.pathAsString)) else None
     },
     shellPrompt := { state =>
-      Project.extract(state).get(sparkConfig).map("[\u001B[93m" + _._1 + "\u001B[0m]> ").getOrElse("> ")
+      Project.extract(state).get(sparkConfig).map("[\u001B[36m" + _._1 + "\u001B[0m]> ").getOrElse("> ")
     },
     commands ++= Seq(
       Command("sparkBuildConfig") { _ =>
