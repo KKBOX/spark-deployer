@@ -8,68 +8,83 @@
 ## SBT plugin mode
 1. Set the environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.
 2. Prepare a project with structure like below:
-```
-project-root
-├── build.sbt
-├── project
-│   └── plugins.sbt
-└── src
-    └── main
-        └── scala
-            └── mypackage
-                └── Main.scala
-```
+
+  ```
+  project-root
+  ├── build.sbt
+  ├── project
+  │   └── plugins.sbt
+  └── src
+      └── main
+          └── scala
+              └── mypackage
+                  └── Main.scala
+  ```
+
 3. Add one line in `project/plugins.sbt`:
-```
-addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "3.0.0")
-```
+
+  ```
+  addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "3.0.0")
+  ```
+
 4. Write your Spark project's `build.sbt` (Here we give a simple example):
-```
-name := "my-project-name"
 
-scalaVersion := "2.11.8"
+  ```
+  name := "my-project-name"
+   
+  scalaVersion := "2.11.8"
+   
+  libraryDependencies ++= Seq(
+    "org.apache.spark" %% "spark-core" % "2.0.0" % "provided"
+  )
+  ```
 
-libraryDependencies ++= Seq(
-  "org.apache.spark" %% "spark-core" % "2.0.0" % "provided"
-)
-```
 5. Write your job's algorithm in `src/main/scala/mypackage/Main.scala`:
-```scala
-package mypackage
 
-import org.apache.spark._
-
-object Main {
-  def main(args: Array[String]) {
-    //setup spark
-    val sc = new SparkContext(new SparkConf())
-    //your algorithm
-    val n = 10000000
-    val count = sc.parallelize(1 to n).map { i =>
-      val x = scala.math.random
-      val y = scala.math.random
-      if (x * x + y * y < 1) 1 else 0
-    }.reduce(_ + _)
-    println("Pi is roughly " + 4.0 * count / n)
+  ```scala
+  package mypackage
+   
+  import org.apache.spark._
+   
+  object Main {
+    def main(args: Array[String]) {
+      //setup spark
+      val sc = new SparkContext(new SparkConf())
+      //your algorithm
+      val n = 10000000
+      val count = sc.parallelize(1 to n).map { i =>
+        val x = scala.math.random
+        val y = scala.math.random
+        if (x * x + y * y < 1) 1 else 0
+      }.reduce(_ + _)
+      println("Pi is roughly " + 4.0 * count / n)
+    }
   }
-}
-```
+  ```
+
 6. Enter `sbt`, and build a config with
-```
-> sparkBuildConfig
-```
+
+  ```
+  > sparkBuildConfig
+  ```
+
 7. Create a cluster with
-```
-> sparkCreateCluster <number-of-workers>
-```
+
+  ```
+  > sparkCreateCluster <number-of-workers>
+  ```
+
 8. Submit your job with
-```
-> sparkSubmit
-```
+
+  ```
+  > sparkSubmit
+  ```
+
 9. When your job is done, destroy your cluster with
-```
-> sparkDestroyCluster
-```
+
+  ```
+  > sparkDestroyCluster
+  ```
 
 ## Embedded mode
 If you don't want to use sbt, or if you would like to trigger the cluster creation from within your Scala application, you can include the library of spark-deployer directly:
