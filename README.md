@@ -188,3 +188,7 @@ Custom TCP Rule | TCP | 4040 | `<your-allowed-ip>`
 
 ### How do I upgrade the config to new version of spark-deployer?
 Use `sparkBuildConfig default from default` to build a new config based on settings in old one. If this doesn't work or you don't mind rebuilding one from scratch, it's recommended to directly create a new config by `sparkBuildConfig`.
+
+## How to contribute
+* Please report issue or ask on gitter if you meet any problem.
+* Pull requests are welcome.
