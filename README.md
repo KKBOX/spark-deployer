@@ -3,7 +3,7 @@
 [![Join the chat at https://gitter.im/KKBOX/spark-deployer](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/KKBOX/spark-deployer?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 * A Scala tool which helps deploying [Apache Spark](http://spark.apache.org/) stand-alone cluster on [EC2](http://aws.amazon.com/ec2/) and submitting job.
 * Currently supports Spark 2.0.0+.
-* There are two modes when using spark-deployer, SBT plugin mode and embedded mode.
+* There are two modes when using spark-deployer: SBT plugin mode and embedded mode.
 
 ## SBT plugin mode
 
@@ -185,3 +185,6 @@ All traffic | All | All | `sg-abcde123`
 SSH | TCP | 22 | `<your-allowed-ip>`
 Custom TCP Rule | TCP | 8080-8081 | `<your-allowed-ip>`
 Custom TCP Rule | TCP | 4040 | `<your-allowed-ip>`
+
+### How do I upgrade the config to new version of spark-deployer?
+Use `sparkBuildConfig default from default` to build a new config based on settings in old one. If this doesn't work or you don't mind rebuilding one from scratch, it's recommended to directly create a new config by `sparkBuildConfig`.
