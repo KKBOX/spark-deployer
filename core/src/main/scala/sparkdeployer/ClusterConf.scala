@@ -239,7 +239,10 @@ object ClusterConf extends Logging {
     val sparkDir = "spark"
     
     val preStartCommands = Seq.empty[String]
-      .++(if (isDefaultAMI) Some("sudo apt-get -y install openjdk-8-jre &> logfile") else None)
+      //fix the encoding problem on ubuntu
+      .++(if (isDefaultAMI) Some("sudo bash -c \"echo -e 'LC_ALL=en_US.UTF-8\\nLANG=en_US.UTF-8' >> /etc/environment\"") else None)
+      //install java 8
+      .++(if (isDefaultAMI) Some("sudo apt-get -qq install openjdk-8-jre") else None)
       //workaround Spark's s3a bug
       //ref: http://deploymentzone.com/2015/12/20/s3a-on-spark-on-aws-ec2/
       .++(if (fixS3A) Some(Seq(
@@ -247,9 +250,6 @@ object ClusterConf extends Logging {
         "wget -nv https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk/1.7.4/aws-java-sdk-1.7.4.jar",
         "wget -nv https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/2.7.1/hadoop-aws-2.7.1.jar"
       ).mkString(" && ")) else None)
-      .:+(s"cd $sparkDir/conf/ && cp log4j.properties.template log4j.properties && echo 'log4j.rootCategory=WARN, console' >> log4j.properties")
-      //fix the encoding problem on ubuntu
-      .++(if (isDefaultAMI) Some("sudo bash -c \"echo -e 'LC_ALL=en_US.UTF-8\\nLANG=en_US.UTF-8' >> /etc/environment\"") else None)
     
     ClusterConf(
       clusterName, region, keypair, pem,
