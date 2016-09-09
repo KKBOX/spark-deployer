@@ -27,7 +27,7 @@ Here are the basic steps to run a Spark job (all the sbt commands support TAB-co
 3. Add one line in `project/plugins.sbt`:
 
   ```
-  addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "3.0.0")
+  addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "3.0.1")
   ```
 
 4. Write your Spark project's `build.sbt` (Here we give a simple example):
@@ -105,7 +105,7 @@ Here are the basic steps to run a Spark job (all the sbt commands support TAB-co
   > sparkBuildConfig <new-config-name> from <old-config-name>
   ```
 
-  All the configs are stored as json files in the `conf/` folder. You can modify it if you know what you're doing.
+  All the configs are stored as `.deployer.json` files in the `conf/` folder. You can modify it if you know what you're doing.
 
 * To change the current config:
 
@@ -130,7 +130,7 @@ Here are the basic steps to run a Spark job (all the sbt commands support TAB-co
 ## Embedded mode
 If you don't want to use sbt, or if you would like to trigger the cluster creation from within your Scala application, you can include the library of spark-deployer directly:
 ```
-libraryDependencies += "net.pishen" %% "spark-deployer-core" % "3.0.0"
+libraryDependencies += "net.pishen" %% "spark-deployer-core" % "3.0.1"
 ```
 Then, from your Scala code, you can do something like this:
 ```scala
@@ -140,8 +140,8 @@ import sparkdeployer._
 val clusterConf = ClusterConf.build()
 
 // save and load ClusterConf
-clusterConf.save("path/to/conf.json")
-val clusterConfReloaded = ClusterConf.load("path/to/conf.json")
+clusterConf.save("path/to/conf.deployer.json")
+val clusterConfReloaded = ClusterConf.load("path/to/conf.deployer.json")
 
 // create cluster and submit job
 val sparkDeployer = new SparkDeployer()(clusterConf)
@@ -169,7 +169,14 @@ libraryDependencies += "org.slf4j" % "slf4j-simple" % "1.7.14"
 ## FAQ
 
 ### Could I use other ami?
-Yes, just specify the ami id when running `sparkBuildConfig`. The image should be HVM EBS-Backed with Java 7+ installed. You can also run some commands (e.g. `sudo apt-get -y install openjdk-8-jre &> logfile`) before Spark start on each machine by editing the `preStartCommands` in json config.
+Yes, just specify the ami id when running `sparkBuildConfig`. The image should be HVM EBS-Backed with Java 7+ installed. You can also run some commands before Spark start on each machine by editing the `preStartCommands` in json config. For example:
+```
+"preStartCommands": [
+  "sudo bash -c \"echo -e 'LC_ALL=en_US.UTF-8\\nLANG=en_US.UTF-8' >> /etc/environment\"",
+  "sudo apt-get -qq install openjdk-8-jre",
+  "cd spark/conf/ && cp log4j.properties.template log4j.properties && echo 'log4j.rootCategory=WARN, console' >> log4j.properties"
+]
+```
 
 When using custom ami, the `root device` should be your root volume's name (`/dev/sda1` for Ubuntu) that can be enlarged by `disk size` settings in master and workers.
 
@@ -188,6 +195,12 @@ Custom TCP Rule | TCP | 4040 | `<your-allowed-ip>`
 
 ### How do I upgrade the config to new version of spark-deployer?
 Use `sparkBuildConfig default from default` to build a new config based on settings in old one. If this doesn't work or you don't mind rebuilding one from scratch, it's recommended to directly create a new config by `sparkBuildConfig`.
+
+### Could I change the directory where configurations are saved?
+You can change it by add the following line to your `build.sbt`:
+```
+sparkConfigDir := "path/to/my-config-dir"
+```
 
 ## How to contribute
 * Please report issue or ask on gitter if you meet any problem.

@@ -146,9 +146,15 @@ class Machines(implicit conf: ClusterConf) extends Logging {
       val number = names.size - existMachines.size
       
       log.info(s"Creating $number instances...")
-      val instances = machineConf.spotPrice match {
-        case Some(price) => requestSpotInstances(machineConf.instanceType, machineConf.diskSize, price, number)
-        case None => requestOnDemandInstances(machineConf.instanceType, machineConf.diskSize, number)
+      val instances = try {
+        machineConf.spotPrice match {
+          case Some(price) => requestSpotInstances(machineConf.instanceType, machineConf.diskSize, price, number)
+          case None => requestOnDemandInstances(machineConf.instanceType, machineConf.diskSize, number)
+        }
+      } catch {
+        case t: Throwable =>
+          log.error("Failed on requesting instances.", t)
+          Seq.empty
       }
       
       val results: Seq[Either[String, Machine]] = instances.zip(names.diff(existMachines.map(_.name))).map {

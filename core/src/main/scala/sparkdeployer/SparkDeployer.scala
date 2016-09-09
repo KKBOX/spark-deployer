@@ -23,6 +23,7 @@ import scala.concurrent.blocking
 import scala.concurrent.duration.Duration
 import scala.sys.process.stringSeqToProcess
 import scala.util.{Failure, Success, Try}
+import sys.process._
 
 class SparkDeployer(implicit conf: ClusterConf) extends Logging {
   implicit val ec = SparkDeployer.ec
@@ -50,7 +51,7 @@ class SparkDeployer(implicit conf: ClusterConf) extends Logging {
   
   def runPreStart(machine: Machine) = {
     conf.preStartCommands.foreach { command =>
-      SSH(machine).withRemoteCommand(command).withTTY.run
+      SSH(machine).withRemoteCommand(command).withRetry.withTTY.run
     }
   }
   
@@ -62,13 +63,16 @@ class SparkDeployer(implicit conf: ClusterConf) extends Logging {
     SSH(machine).withRemoteCommand(s"./${conf.sparkDir}/sbin/start-slave.sh -h ${machine.address} spark://${master.address}:7077").run
   }
 
-  //TODO make sure ssh key exist in the agent if no pem provided
-  
   //main functions
   def createCluster(numOfWorkers: Int) = {
-    if (getMaster.isDefined) {
-      sys.error("Master already exists.")
-    }
+    assert(getMaster.isEmpty, "Master already exists.")
+    //make sure ssh private key exists
+    conf.pem.foreach(path => assert(new File(path).exists, "The identity file you specify doesn't exist."))
+    assert({
+      val sshFiles = new File(sys.props("user.home") + "/.ssh/").listFiles().map(_.getName)
+      sshFiles.contains("id_dsa") || sshFiles.contains("id_rsa") || "ssh-add -L".!!.startsWith("ssh-")
+    }, "I can't find your ssh private key.")
+    
     val master = Future {
       val master = machines.createMachines(Seq(masterName), isMaster = true).head
       downloadSpark(master)
@@ -76,6 +80,10 @@ class SparkDeployer(implicit conf: ClusterConf) extends Logging {
       startMaster(master)
       log.info(s"[${master.name}] Master started.")
       master
+    }.recover {
+      case t: Throwable =>
+        log.error(s"[${masterName}] Failed on creating master.", t)
+        throw t
     }
     val workers = if (numOfWorkers == 0) {
       Seq.empty[Future[Machine]]
@@ -90,6 +98,10 @@ class SparkDeployer(implicit conf: ClusterConf) extends Logging {
             log.info(s"[${worker.name}] Worker started.")
             worker
           }
+        }.recover {
+          case t: Throwable =>
+            log.error(s"[${worker.name}] Failed on creating worker.", t)
+            throw t
         }
       }
     }
@@ -113,6 +125,10 @@ class SparkDeployer(implicit conf: ClusterConf) extends Logging {
           startWorker(worker, master)
           log.info(s"[${worker.name}] Worker started.")
           worker
+        }.recover {
+          case t: Throwable =>
+            log.error(s"[${worker.name}] Failed on creating worker.", t)
+            throw t
         }
       }
     }
