@@ -27,7 +27,7 @@ Here are the basic steps to run a Spark job (all the sbt commands support TAB-co
 3. Add one line in `project/plugins.sbt`:
 
   ```
-  addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "3.0.1")
+  addSbtPlugin("net.pishen" % "spark-deployer-sbt" % "3.0.2")
   ```
 
 4. Write your Spark project's `build.sbt` (Here we give a simple example):
@@ -130,7 +130,7 @@ Here are the basic steps to run a Spark job (all the sbt commands support TAB-co
 ## Embedded mode
 If you don't want to use sbt, or if you would like to trigger the cluster creation from within your Scala application, you can include the library of spark-deployer directly:
 ```
-libraryDependencies += "net.pishen" %% "spark-deployer-core" % "3.0.1"
+libraryDependencies += "net.pishen" %% "spark-deployer-core" % "3.0.2"
 ```
 Then, from your Scala code, you can do something like this:
 ```scala
@@ -194,7 +194,7 @@ Custom TCP Rule | TCP | 8080-8081 | `<your-allowed-ip>`
 Custom TCP Rule | TCP | 4040 | `<your-allowed-ip>`
 
 ### How do I upgrade the config to new version of spark-deployer?
-Use `sparkBuildConfig default from default` to build a new config based on settings in old one. If this doesn't work or you don't mind rebuilding one from scratch, it's recommended to directly create a new config by `sparkBuildConfig`.
+Change to the config you want to upgrade, and run `sparkUpgradeConfig` to build a new config based on settings in old one. If this doesn't work or you don't mind rebuilding one from scratch, it's recommended to directly create a new config by `sparkBuildConfig`.
 
 ### Could I change the directory where configurations are saved?
 You can change it by add the following line to your `build.sbt`:

@@ -96,6 +96,26 @@ object SparkDeployerPlugin extends AutoPlugin {
           state.log.error(s"Config ${configName} does not exist.")
           state
         }
+      },
+      Command.command("sparkUpgradeConfig") { state =>
+        StaticLoggerBinder.sbtLogger = state.log
+        
+        val extracted = Project.extract(state)
+        import extracted._
+        
+        val suggestedClusterName = name in currentRef get structure.data
+        val suggestedSparkVersion = (libraryDependencies in currentRef get structure.data)
+          .flatMap(libs => libs.find(_.name == "spark-core").map(_.revision))
+        
+        sparkConfig.value match {
+          case None =>
+            state.log.error("You don't have default config, use `sparkBuildConfig` to build one.")
+            state
+          case Some((configName, clusterConf)) =>
+            val newClusterConf = ClusterConf.build(Some(clusterConf), suggestedClusterName, suggestedSparkVersion, true)
+            newClusterConf.save(sparkConfigDir.value + "/" + configName + ".deployer.json")
+            Project.extract(state).append(Seq(sparkConfig := Some(configName -> newClusterConf)), state)
+        }
       }
     ),
     sparkCreateCluster := {

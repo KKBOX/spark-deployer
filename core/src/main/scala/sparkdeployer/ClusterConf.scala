@@ -149,7 +149,8 @@ object ClusterConf extends Logging {
   def build(
     base: Option[ClusterConf] = None,
     suggestedClusterName: Option[String] = None,
-    suggestedSparkVersion: Option[String] = None
+    suggestedSparkVersion: Option[String] = None,
+    upgrade: Boolean = false
   ) = {
     val clusterName = readLine("cluster name", base.map(_.clusterName).orElse(suggestedClusterName))
     
@@ -174,7 +175,7 @@ object ClusterConf extends Logging {
         .sortBy(_.release)
         .lastOption
         .map(_.ami)
-      val res = readLine("ami", base.map(_.ami).orElse(defaultAMI))
+      val res = readLine("ami", if (upgrade) defaultAMI else base.map(_.ami).orElse(defaultAMI))
       (res, defaultAMI.fold(false)(_ == res))
     }
     val user = if (isDefaultAMI) "ubuntu" else {
@@ -188,23 +189,37 @@ object ClusterConf extends Logging {
     val masterInstanceType = readLine(
       "instance type of master", base.map(_.master.instanceType).orElse(Some("m4.large"))
     )
-    val masterFreeMemory = readLine("driver memory", getFreeMemory(region, masterInstanceType))
+    val masterFreeMemory = readLine(
+      "driver memory",
+      base.filter(_.master.instanceType == masterInstanceType)
+        .map(_.master.freeMemory)
+        .orElse(getFreeMemory(region, masterInstanceType))
+    )
     val masterDiskSize = readLine(
       "disk size of master (GB)", base.map(_.master.diskSize).orElse(Some(15)).map(_.toString)
     ).toInt
     val masterSpotPrice = readLineOption(
-      "spot price of master (enter \"None\" to disable)", None
+      "spot price of master (enter \"None\" to disable)",
+      base.filter(_.master.instanceType == masterInstanceType).flatMap(_.master.spotPrice)
     ).filterNot(_ == "None")
 
     val workerInstanceType = readLine(
       "instance type of worker", base.map(_.worker.instanceType).orElse(Some("c4.xlarge"))
     )
-    val workerFreeMemory = readLine("executor memory", getFreeMemory(region, workerInstanceType))
+    val workerFreeMemory = readLine(
+      "executor memory",
+      base.filter(_.worker.instanceType == workerInstanceType)
+        .map(_.worker.freeMemory)
+        .orElse(getFreeMemory(region, workerInstanceType))
+    )
     val workerDiskSize = readLine(
       "disk size of worker (GB)", base.map(_.worker.diskSize).orElse(Some(60)).map(_.toString)
     ).toInt
     val workerSpotPrice = readLineOption(
-      "spot price of worker (enter \"None\" to disable)", getSpotPrice(region, workerInstanceType)
+      "spot price of worker (enter \"None\" to disable)",
+      base.filter(_.worker.instanceType == workerInstanceType)
+        .flatMap(_.worker.spotPrice)
+        .orElse(getSpotPrice(region, workerInstanceType))
     ).filterNot(_ == "None")
 
     println(s"(You may check https://${region}.console.aws.amazon.com/vpc/home#subnets to fill following settings.)")
@@ -233,7 +248,7 @@ object ClusterConf extends Logging {
       val suggestedTgzUrl = sparkVersion
         .map(v => s"http://d3kbcqa49mib13.cloudfront.net/spark-$v-bin-hadoop2.7.tgz")
 
-      val res = readLine("Spark's tarball url", base.map(_.sparkTgzUrl).orElse(suggestedTgzUrl))
+      val res = readLine("Spark's tarball url", if (upgrade) suggestedTgzUrl else base.map(_.sparkTgzUrl).orElse(suggestedTgzUrl))
       (res, suggestedTgzUrl.fold(false)(_ == res))
     }
     val sparkDir = "spark"
